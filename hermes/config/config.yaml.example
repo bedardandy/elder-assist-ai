@@ -1,0 +1,79 @@
+# ============================================================================
+# ElderAssist — Hermes Agent config.yaml (non-secret settings)
+# ============================================================================
+# Copy the sections you want into ~/.hermes/config.yaml (Linux/macOS) or
+# %LOCALAPPDATA%\hermes\config.yaml (Windows). Secrets stay in .env; this file is
+# safe to keep in your dotfiles. Reference secrets with ${VAR} substitution
+# (only ${VAR} works, not bare $VAR).
+#
+# Verify option names against your installed version — they move fast:
+#     hermes config            # view current settings
+#     hermes config check      # flag missing/renamed options
+#     hermes config --help
+# ============================================================================
+
+
+# --- Model: point Hermes at the local Ollama from our compose stack --------
+# Ollama exposes an OpenAI-compatible API at http://localhost:11434/v1. Set the
+# model to whatever OLLAMA_MODEL is in the repo root .env (default qwen3:8b).
+# For a hosted API instead (more capable, leaves the house), run `hermes model`
+# or `hermes setup --portal` — see hermes/README.md for the trade-off.
+model:
+  provider: custom
+  base_url: http://localhost:11434/v1
+  default: qwen3:8b            # keep in sync with OLLAMA_MODEL in ../../.env
+# Ollama ignores the key, but the OpenAI-compatible client wants one present.
+# Set a placeholder in .env:  hermes config set OPENAI_API_KEY ollama-local
+
+
+# --- Home Assistant gateway: let house events wake the agent ---------------
+# The homeassistant TOOLSET turns on automatically from HASS_TOKEN (in .env).
+# This block only controls the event GATEWAY — which state changes should
+# trigger an agent run. By default NOTHING is forwarded; opt in narrowly so the
+# agent is not woken by every sensor. Used by wellness/escalation flows.
+platforms:
+  homeassistant:
+    enabled: true
+    extra:
+      # Watch just what matters for elder care, not the whole house:
+      watch_entities:
+        - binary_sensor.front_door           # door-left-open wellness hook
+        - input_boolean.medication_acknowledged
+      # watch_domains: [binary_sensor]       # or by domain
+      # watch_all: false                     # avoid; very noisy
+      ignore_entities: []
+      cooldown_seconds: 30
+
+
+# --- Memory: household memory book -----------------------------------------
+memory:
+  memory_enabled: true
+  write_approval: false        # let the agent persist people/house-facts on its own
+
+
+# --- Safety: this is an elder-care box; lock it down (see README §Safety) ---
+approvals:
+  mode: manual                 # always ask a human before anything dangerous
+  deny:                        # fnmatch globs, case-insensitive, always blocked
+    - "rm -rf*"
+    - "*shutdown*"
+    - "*reboot*"
+    - "git push --force*"
+
+# Restrict the agent's working directory (production hardening).
+terminal:
+  backend: local               # this use case needs no shell; see tools below
+  # cwd: /home/hermes/work
+
+# Home networks use private IPs — allow the agent to reach HA/HomeBox/Grocy on
+# the LAN (Hermes blocks RFC-1918 / loopback by default via SSRF protection).
+security:
+  allow_private_urls: true
+
+
+# --- Skills: where our workspace skills live -------------------------------
+# If you copy hermes/skills/ straight into ~/.hermes/skills/ you need nothing
+# here. If you keep them in the repo and point Hermes at them, add the path:
+# skills:
+#   external_dirs:
+#     - /path/to/elder-assist-ai/hermes/skills
