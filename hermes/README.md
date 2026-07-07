@@ -25,7 +25,7 @@ What's in this directory:
 | File | Purpose |
 |---|---|
 | [`AGENTS.md`](AGENTS.md) | The persona + hard guardrails + standing orders. Loaded by Hermes as the session context file. |
-| [`skills/`](skills/) | Six elder-care skills in the [agentskills.io](https://agentskills.io) format (`SKILL.md` per directory). |
+| [`skills/`](skills/) | Eleven elder-care skills in the [agentskills.io](https://agentskills.io) format (`SKILL.md` per directory). |
 | [`config/.env.example`](config/.env.example) | Env template for the skills' integrations (HA, HomeBox, Grocy) + channel credentials. |
 | [`config/config.yaml.example`](config/config.yaml.example) | Non-secret Hermes settings: Ollama provider, HA gateway, safety, memory. |
 
@@ -123,8 +123,10 @@ skills:
 ```
 Either way, verify with `hermes tools` (the `homeassistant`, `cronjob`, `memory`
 toolsets should be present) and by invoking a skill: `/remind-me test in 2 minutes`.
-Skills are the six `SKILL.md` procedures — they show up as `/remind-me`, `/memory-book`,
-`/medication-refill`, `/call-setup`, `/tv-help`, `/daily-rhythm`.
+Skills are the eleven `SKILL.md` procedures — they show up as `/remind-me`,
+`/memory-book`, `/medication-refill`, `/call-setup`, `/tv-help`, `/daily-rhythm`, and the
+vision/money/scam set `/scam-check`, `/label-reader`, `/bill-helper`, `/local-resources`,
+`/seasonal-chores` (see §9).
 
 Fill secrets and settings from [`config/.env.example`](config/.env.example) and
 [`config/config.yaml.example`](config/config.yaml.example). Use `hermes config set KEY
@@ -268,6 +270,48 @@ guardrails in `AGENTS.md` are the behavioral half; these are the system half). S
   this HA instance (see `config.yaml.example` approvals block).
 - **Watch the logs** (`~/.hermes/logs/`) for unauthorized attempts, and keep Hermes
   updated with `hermes update`.
+
+## 9. Vision, money, and scam features
+
+This batch adds photo-reading and two hard trust boundaries. All of it is user-initiated
+and advice-only — nothing here watches, buys, or pays.
+
+**Pull the vision model** (served by the same Ollama as the chat model):
+```bash
+docker compose exec ollama ollama pull qwen2.5vl:7b   # default; needs Ollama 0.7.0+
+```
+Set `OLLAMA_VISION_MODEL` in `~/.hermes/.env` (default `qwen2.5vl:7b`; alternatives
+`llava`, `minicpm-v`). Hermes reads images natively on its chat channels; the skills only
+fall back to a direct `http://localhost:11434/api/generate` call if the backend is
+text-only. The kiosk "Read This For Me" camera page reaches the same model through the
+locked-down nginx proxy (Ollama stays loopback-bound).
+
+- **No passive cameras (D11).** Every photo is deliberately taken by a person, on their
+  initiative — never surveillance. 7B-class vision on tiny date stamps is imperfect, so
+  the skills quote the raw text they read and say "I'm not sure, send a clearer photo"
+  rather than guessing a date.
+- **Scam shield is advice-only (D13).** `scam-check` reads the suspicious thing, runs the
+  red-flag checklist, gives a plain verdict with the *why*, always offers to loop in the
+  caregiver, never says "definitely safe", never shames, and treats "don't tell your
+  family" as a red flag. It never answers calls or deletes mail.
+- **Money is read-and-remind, never transact (D14).** `bill-helper` extracts and
+  schedules; a human pays. No stored credentials, last-4 account digits only, family
+  visibility opt-in via `BILLS_FAMILY_VISIBLE`.
+
+**New skills:**
+
+| Skill | What it does |
+|---|---|
+| `scam-check` | Reads a suspicious letter/text/email/call story → red-flag verdict + caregiver loop-in; already-scammed recovery steps. |
+| `label-reader` | Reads labels, expiry dates, medicine bottles (verbatim only), and appliance error codes from a photo; offers Grocy/HA/HomeBox follow-ups. |
+| `bill-helper` | Reads a photographed bill → confirm → HA due-date reminder N days early; anomaly/duplicate detection; never pays. |
+| `local-resources` | Finds senior services near `HOME_AREA` (coarse), always names the Eldercare Locator + 211, saves chosen vendors. |
+| `seasonal-chores` | Vendor registry + seasonal checklist + weather-triggered vendor drafts (approval-gated) tracked as HA `todo.projects`. |
+
+These read `OLLAMA_VISION_MODEL`, `HOME_AREA`, and `BILLS_FAMILY_VISIBLE` from
+[`config/.env.example`](config/.env.example) (plus the existing HA/HomeBox/Grocy/people
+vars). The persona rules that back them live in [`AGENTS.md`](AGENTS.md) §3.5 (scam
+shield), §3.6 (money), and the weather-awareness rule in §9.
 
 ---
 
