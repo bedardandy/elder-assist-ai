@@ -115,6 +115,7 @@ export default function mountAsk(ctx) {
 
   if (SR) {
     micBtn.addEventListener('click', () => {
+      if (busy) return; // a question or photo is already being handled
       if (listening) { try { recog.stop(); } catch { /* noop */ } return; }
       stopSpeaking();
       recog = new SR();

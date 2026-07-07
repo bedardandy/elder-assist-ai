@@ -84,6 +84,32 @@ the system.
 - Backup volume naming matches the resolved compose project naming.
 - `.env` files are properly gitignored at every depth.
 
+## Round 2 — the living-alone expansion
+
+The second feature wave (local vision reading, scam shield, BLE trackers, bills,
+local resources, weather/seasonal chores) got its own adversarial pass, focused on
+the new attack surface. The reviewer went further than reading: it rendered the
+kiosk's nginx proxy template with the real image entrypoint, ran `nginx -t`, and
+drove live requests through a running container against a fake Ollama upstream.
+
+**What held up (verified live):** the vision proxy's access control is airtight —
+wrong key 403, missing key 403, GET 403, `/ollama/api/tags` and every other Ollama
+endpoint unreachable, genuinely closed-by-default with an empty key, no
+path-normalization or encoded-slash bypass. All round-2 hotline numbers
+(reportfraud.ftc.gov, Eldercare Locator 1-800-677-1116, 211) verified correct; the
+scam and money skills honor every guardrail (no "definitely safe", no shaming,
+no payment credentials anywhere).
+
+**What it caught (fixed):**
+
+| # | Finding | Resolution |
+|---|---|---|
+| W28 | **A literal `proxy_pass` hostname coupled the entire kiosk — the elder's emergency surface — to Ollama's existence.** If the kiosk container started before/without Ollama (host reboot ordering, Ollama removed or OOM-crashed), nginx aborted at config load and the whole six-button app crash-looped. Reproduced live. | Request-time DNS resolution (`resolver 127.0.0.11` + variable upstream). Re-verified live: kiosk now starts with no Ollama, serves everything, returns a friendly error for vision only, and self-heals the moment Ollama appears |
+| W29 | Template comment claimed an *unset* key means 403; actually an unset (vs empty) variable makes nginx refuse to start when run outside our compose file (still fail-closed, but not as described) | Comment corrected to the true behavior |
+| W30 | `label-reader` used `{CAREGIVER_NAME}` in its medicine redirect without declaring the variable — rendering an empty name | Declared in the skill's requirements |
+| W31 | Tapping the mic while a photo was being read silently discarded the spoken question | Mic now guarded by the busy flag |
+| W32 | Weather guardian can announce twice when a severe change lands near the morning check (and snowy-rainy days speak both ice and snow guidance) | Accepted and documented in the blueprint header — harmless but chatty, with tuning advice |
+
 ## Method note
 
 Each reviewer was independent and read the code cold, with an explicit instruction to

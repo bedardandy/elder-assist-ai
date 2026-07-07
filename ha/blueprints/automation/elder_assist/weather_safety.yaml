@@ -17,6 +17,12 @@
 #       caregiver AND fire an event so the seasonal-chores flow can react
 #       (arrange the plow, remind about the snow-shoveling contract).
 #
+# KNOWN CAVEAT (accepted): with mode: parallel, a severe state-change that lands
+#   near the morning check can announce twice within a minute, and a snowy-rainy
+#   day can speak both the ice and the snow guidance back-to-back. Harmless but
+#   chatty; if it bothers the household, narrow the severe-condition list or
+#   move the morning check earlier so the two rarely coincide.
+#
 # EVENT CONTRACT  (this is the integration point with the seasonal flow)
 #   event_type: elder_assist_snow_forecast
 #   event_data:

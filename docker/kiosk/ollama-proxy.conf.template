@@ -17,9 +17,13 @@
 #     Nothing else Ollama exposes (/api/tags, model pulls, …) is reachable.
 #   - POST only (other methods → 403 via limit_except).
 #   - Every request must carry X-Kiosk-Key EXACTLY equal to ${KIOSK_OLLAMA_KEY}.
-#   - CLOSED BY DEFAULT: if KIOSK_OLLAMA_KEY is empty/unset, an empty header is
-#     the only value that could match — and we always deny an empty header — so
-#     the proxy returns 403 for every request until a key is configured.
+#   - CLOSED BY DEFAULT: with KIOSK_OLLAMA_KEY empty, an empty header is the only
+#     value that could match — and we always deny an empty header — so the proxy
+#     returns 403 for every request until a key is configured. (The compose file
+#     always defines the variable via `${KIOSK_OLLAMA_KEY:-}`; if you run this
+#     container WITHOUT that compose file and leave the env var entirely unset,
+#     envsubst leaves the literal text behind and nginx refuses to start —
+#     still fail-closed, just louder.)
 #   - Big bodies (photos) and slow CPU inference are allowed for.
 #
 # Only ${KIOSK_OLLAMA_KEY} is substituted here; nginx's own $variables are left
@@ -29,6 +33,17 @@
 server {
     listen       80;
     server_name  localhost;
+
+    # Resolve `ollama` at REQUEST time via Docker's embedded DNS, not at config
+    # load. A literal hostname in proxy_pass is resolved once at startup and
+    # nginx ABORTS if the name is missing — which would take the whole kiosk
+    # (the elder's emergency surface) down whenever this container starts
+    # before/without Ollama (host-reboot start ordering, Ollama removed or
+    # failing). With the variable form used below, the kiosk always starts;
+    # a vision request while Ollama is down just returns 502 and the app
+    # shows its friendly error.
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set $ollama_upstream ollama;
 
     # ---- Static PWA (unchanged) -------------------------------------------
     location / {
@@ -54,7 +69,7 @@ server {
         client_max_body_size 20m;      # room for a downscaled photo
         proxy_read_timeout   300s;     # vision inference is slow on CPU
         proxy_set_header     Host $host;
-        proxy_pass           http://ollama:11434/api/chat;
+        proxy_pass           http://$ollama_upstream:11434/api/chat;
     }
 
     # ---- Locked-down Ollama proxy: generate -------------------------------
@@ -69,6 +84,6 @@ server {
         client_max_body_size 20m;
         proxy_read_timeout   300s;
         proxy_set_header     Host $host;
-        proxy_pass           http://ollama:11434/api/generate;
+        proxy_pass           http://$ollama_upstream:11434/api/generate;
     }
 }

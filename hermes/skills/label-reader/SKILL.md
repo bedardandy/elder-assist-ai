@@ -10,6 +10,9 @@ required_environment_variables:
   - name: ELDER_NAME
     prompt: The elder's first name
     required_for: warm dialogue
+  - name: CAREGIVER_NAME
+    prompt: The primary caregiver's first name
+    required_for: the medicine-question redirect ("want me to help you reach {CAREGIVER_NAME}?")
   - name: OLLAMA_VISION_MODEL
     prompt: Local Ollama vision model tag (optional)
     help: Default qwen2.5vl:7b; used when Hermes must read the photo itself
