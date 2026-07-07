@@ -1,5 +1,10 @@
 # Install & Setup — the guided 30 minutes
 
+> **Before you buy anything:** [playbooks/hardware-and-shopping.md](playbooks/hardware-and-shopping.md)
+> lists the common hardware paths with exact search terms. And
+> [REHEARSAL.md](REHEARSAL.md) shows a real install of this guide, end to end,
+> with timings and the failure modes to expect.
+
 This is the hands-on companion to [ARCHITECTURE.md](ARCHITECTURE.md). Follow it
 top to bottom and you will have a working hub: Home Assistant, a local LLM,
 the elder's kiosk app, and (optionally) fully local voice.

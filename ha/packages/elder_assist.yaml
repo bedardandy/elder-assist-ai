@@ -355,20 +355,25 @@ intent_script:
       text: Great, I've marked your second medication as taken.
 
   # "I put the {thing} {prep} {location}"
+  # The wildcards capture articles/possessives verbatim ("my keys", "the kitchen
+  # drawer"), so we normalize the thing at store time — "where are my keys" and
+  # "where are the keys" must find the same note. (Found in the live rehearsal,
+  # docs/REHEARSAL.md.)
   ElderStoreThingLocation:
     action:
       - action: input_text.set_value
         target:
           entity_id: input_text.last_thing_put_away
         data:
-          value: "{{ thing }}"
+          value: "{{ thing | lower | regex_replace('^(my|the|his|her|our|some) ', '') }}"
       - action: input_text.set_value
         target:
           entity_id: input_text.last_thing_location
         data:
           value: "{{ prep }} {{ location }}"
     speech:
-      text: "Got it. Your {{ thing }} is {{ prep }} {{ location }}."
+      # Echo the speaker's own words back; avoids is/are and article stacking.
+      text: "Got it. {{ thing | capitalize }} — {{ prep }} {{ location }}. I'll remember."
 
   # "where did I put the {thing}" / "where is the {thing}"
   ElderWhereDidIPut:
@@ -376,13 +381,14 @@ intent_script:
       text: >-
         {% set noted = states('input_text.last_thing_put_away') %}
         {% set where = states('input_text.last_thing_location') %}
-        {% if noted | lower == thing | lower and where not in ['unknown', 'unavailable', ''] %}
-          You put the {{ thing }} {{ where }}.
+        {% set asked = thing | lower | regex_replace('^(my|the|his|her|our|some) ', '') %}
+        {% if noted | lower == asked and where not in ['unknown', 'unavailable', ''] %}
+          You put the {{ asked }} {{ where }}.
         {% elif noted not in ['unknown', 'unavailable', ''] %}
-          I don't have a note about the {{ thing }}. The last thing I noted was
+          I don't have a note about the {{ asked }}. The last thing I noted was
           the {{ noted }}, which is {{ where }}.
         {% else %}
-          I'm sorry, I don't have a note about where the {{ thing }} is.
+          I'm sorry, I don't have a note about where the {{ asked }} is.
         {% endif %}
 
   # "I'm okay" / "I am fine"

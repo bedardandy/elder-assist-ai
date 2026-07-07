@@ -123,15 +123,18 @@ blueprint:
           filter:
             - domain: input_boolean
 
-    notify_device:
-      name: Phone to notify (optional)
+    notify_service:
+      name: Phone notify service (optional)
       description: >-
-        A mobile_app device to send an actionable push to. Leave empty to skip
-        push and rely on the spoken announcement + dashboard/voice ack.
-      default:
+        A mobile_app notify service to send an actionable push to, e.g.
+        "notify.mobile_app_susans_phone" (Settings → Devices → your phone shows
+        the name). Leave empty to skip push and rely on the spoken announcement
+        + dashboard/voice ack. (A device selector is NOT used here on purpose:
+        an empty optional device makes the automation fail HA's config
+        validation — found in the live install rehearsal, docs/REHEARSAL.md.)
+      default: ""
       selector:
-        device:
-          integration: mobile_app
+        text:
 
     grace_minutes:
       name: Grace period (minutes)
@@ -187,7 +190,7 @@ variables:
   announce_volume: !input announce_volume
   tts_engine: !input tts_engine
   ack_boolean: !input ack_boolean
-  notify_device: !input notify_device
+  notify_service: !input notify_service
   escalation_service: !input escalation_service
   escalation_message: !input escalation_message
   # Static action id for the push "Taken" button (see README notes on scope).
@@ -224,20 +227,21 @@ actions:
           message: "It's time to take {{ medication }}."
 
   # ---- 1b. Actionable push (optional) --------------------------------------
+  # Templated service name (valid since HA 2021.x); the if-guard means an empty
+  # input cleanly skips the push instead of failing config validation.
   - if:
       - condition: template
-        value_template: "{{ notify_device not in [none, ''] }}"
+        value_template: "{{ notify_service not in [none, ''] }}"
     then:
-      - device_id: !input notify_device
-        domain: mobile_app
-        type: notify
-        title: Medication reminder
-        message: "It's time to take {{ medication }}."
+      - action: "{{ notify_service }}"
         data:
-          tag: "elder_med_{{ medication | slugify }}"
-          actions:
-            - action: "{{ ack_action }}"
-              title: I took it
+          title: Medication reminder
+          message: "It's time to take {{ medication }}."
+          data:
+            tag: "elder_med_{{ medication | slugify }}"
+            actions:
+              - action: "{{ ack_action }}"
+                title: I took it
 
   # ---- 2. Wait for acknowledgment, up to grace_minutes ---------------------
   - wait_for_trigger:

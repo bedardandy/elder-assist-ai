@@ -144,6 +144,19 @@ $tzValue = if ([string]::IsNullOrWhiteSpace($tzInput)) { $defaultTz } else { $tz
 Set-EnvValue 'TZ' $tzValue
 Info "Timezone: $tzValue"
 
+# --- 4b. Auto-generate required secrets left empty in .env -----------------
+# HomeBox refuses to boot without a >=32-byte HBOX_AUTH_API_KEY_PEPPER, so we
+# always make sure one exists (harmless if the inventory profile is unused).
+# Generated ONCE and kept: rotating it invalidates issued HomeBox API keys.
+$currentPepper = Get-EnvValue 'HOMEBOX_API_KEY_PEPPER' ''
+if ([string]::IsNullOrEmpty($currentPepper)) {
+    $pepperBytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($pepperBytes)
+    $newPepper = ($pepperBytes | ForEach-Object { $_.ToString('x2') }) -join ''
+    Set-EnvValue 'HOMEBOX_API_KEY_PEPPER' $newPepper
+    Info "Generated HOMEBOX_API_KEY_PEPPER (HomeBox requires it to start)."
+}
+
 # --- 5. Persist chosen profiles -------------------------------------------
 $profiles = @()
 if ($Voice)     { $profiles += 'voice' }

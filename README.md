@@ -85,7 +85,7 @@ docker/          Compose stack (profiles: core, voice, inventory, grocy, openweb
 ha/              Home Assistant blueprints, packages, elder dashboard
 hermes/          Hermes Agent workspace: persona, elder-care skills, channel setup
 pwa/             The big-button kiosk app (no build step, static files)
-docs/            Architecture, decisions, install, threat model
+docs/            Architecture, decisions, install, wargame & rehearsal records
 docs/playbooks/  Medication · calling & video · TV & casting · memory book ·
                  onboarding · safety & wellness
 ```
@@ -96,7 +96,7 @@ docs/playbooks/  Medication · calling & video · TV & casting · memory book ·
 2. **The LLM never owns a deadline.** Anything that must happen is a Home Assistant
    automation; the LLM converses, remembers, and *creates* automations.
 3. **The elder is the user, not the admin.** Caregivers hold the keys; the elder's
-   surfaces are simple, PIN-less, and capability-scoped.
+   surfaces are simple and PIN-less, with dangerous actuators kept off their reach.
 4. **Consent before telemetry.** Location, cameras, and memory are family
    conversations first (see the onboarding playbook).
 5. **Glue, don't fork.** We ride mature upstreams and keep our customization in
@@ -104,9 +104,13 @@ docs/playbooks/  Medication · calling & video · TV & casting · memory book ·
 
 ## Status
 
-Early but battle-tested on paper: the design went through adversarial review
+Early but battle-tested twice over: the design went through adversarial review
 (security/privacy, elder UX, failure modes) documented in
-[docs/WARGAME.md](docs/WARGAME.md). Configs are CI-validated. Treat it as a strong
+[docs/WARGAME.md](docs/WARGAME.md), **and** a full live install rehearsal —
+real containers, real Home Assistant, real voice intents — documented in
+[docs/REHEARSAL.md](docs/REHEARSAL.md). Configs are CI-validated. Shopping for
+hardware? [docs/playbooks/hardware-and-shopping.md](docs/playbooks/hardware-and-shopping.md)
+has the common configurations and exact search terms. Treat it as a strong
 starting kit, not a product with a support contract.
 
 ## License

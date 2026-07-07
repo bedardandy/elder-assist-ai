@@ -231,6 +231,10 @@ services:
     environment:
       TZ: ${TZ:-America/New_York}
       HBOX_OPTIONS_ALLOW_REGISTRATION: "false"  # caregiver creates accounts only
+      # Required by HomeBox (>=32 bytes) or the container panics on boot.
+      # setup.sh/setup.ps1 auto-generate this into .env; rotating it later
+      # invalidates any HomeBox API keys you have issued (e.g. for Hermes/PWA).
+      HBOX_AUTH_API_KEY_PEPPER: ${HOMEBOX_API_KEY_PEPPER:-}
       HBOX_STORAGE_DATA: /data
       HBOX_STORAGE_SQLITE_URL: /data/homebox.db?_pragma=busy_timeout=999&_pragma=journal_mode=WAL&_fk=1
     networks:

@@ -161,6 +161,25 @@ tmp="$(mktemp)"
 awk -v tz="${TZ_VALUE}" '/^TZ=/{print "TZ=" tz; next} {print}' "${ENV_FILE}" >"${tmp}" && mv "${tmp}" "${ENV_FILE}"
 info "Timezone: ${TZ_VALUE}"
 
+# --- 4b. Auto-generate required secrets left empty in .env -----------------
+# HomeBox refuses to boot without a >=32-byte HBOX_AUTH_API_KEY_PEPPER, so we
+# always make sure one exists (harmless if the inventory profile is unused).
+# Generated ONCE and kept: rotating it invalidates issued HomeBox API keys.
+# A .env from an older version may lack the line entirely — add it, then fill it.
+grep -qE '^HOMEBOX_API_KEY_PEPPER=' "${ENV_FILE}" || printf 'HOMEBOX_API_KEY_PEPPER=\n' >>"${ENV_FILE}"
+CURRENT_PEPPER="$(grep -E '^HOMEBOX_API_KEY_PEPPER=' "${ENV_FILE}" | tail -n1 | cut -d= -f2- || true)"
+if [ -z "${CURRENT_PEPPER}" ]; then
+  NEW_PEPPER="$(gen_key)$(gen_key)"   # 64 hex chars, comfortably >= 32 bytes
+  if [ -n "${NEW_PEPPER}" ]; then
+    tmp="$(mktemp)"
+    awk -v k="${NEW_PEPPER}" '/^HOMEBOX_API_KEY_PEPPER=/{print "HOMEBOX_API_KEY_PEPPER=" k; next} {print}' "${ENV_FILE}" >"${tmp}" && mv "${tmp}" "${ENV_FILE}"
+    info "Generated HOMEBOX_API_KEY_PEPPER (HomeBox requires it to start)."
+  else
+    warn "Couldn't generate HOMEBOX_API_KEY_PEPPER (no openssl or /dev/urandom)."
+    say  "   HomeBox will crash-loop until you set it in .env by hand."
+  fi
+fi
+
 # --- 5. Persist chosen profiles into .env ----------------------------------
 PROFILES=""
 [ "${WANT_VOICE}" -eq 1 ]     && PROFILES="${PROFILES}${PROFILES:+,}voice"
@@ -293,7 +312,11 @@ say "  ${BOLD}Kiosk PWA${RESET}       http://${HOST_HINT}:${KIOSK_PORT}   <- the
 say
 say "Next, follow the guided setup:  ${BOLD}docs/INSTALL.md${RESET}"
 say "  1. Create the caregiver admin + restricted elder user in Home Assistant."
-[ "${WANT_VOICE}" -eq 1 ] && say "  2. Add the Wyoming voice integrations (whisper/piper/openwakeword) — see INSTALL.md."
-say "  ${BOLD}.${RESET} Set Ollama as HA's conversation agent, then bring in the agent layer (hermes/README.md)."
+NEXT_STEP=2
+if [ "${WANT_VOICE}" -eq 1 ]; then
+  say "  2. Add the Wyoming voice integrations (whisper/piper/openwakeword) — see INSTALL.md."
+  NEXT_STEP=3
+fi
+say "  ${NEXT_STEP}. Set Ollama as HA's conversation agent, then bring in the agent layer (hermes/README.md)."
 say
 say "Useful commands:  make ps | make logs | make down | make backup"
