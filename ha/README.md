@@ -213,7 +213,100 @@ panels) off this HA instance (or on a separate instance this token can't reach).
 
 ---
 
-## 7. Test checklist
+## 7. Finding things: Bluetooth trackers
+
+The Find My Things page has big per-item "Make my keys beep" buttons that call
+`script.find_keys` / `script.find_wallet` (in the package). Those scripts work
+the moment you install the package — they **announce** ("Ringing your keys
+now — listen!") and, if the elder has told the house where the keys are (the
+"I put the keys on the counter" note), they **speak that last-seen spot** as a
+fallback. To make a physical tag actually *ring*, add the hardware below and
+wire one ring action into the script's `# EDIT` block.
+
+### Why this hardware (see `../docs/DECISIONS.md` D12)
+- **AirTags can't be rung from Home Assistant** — they're locked to Apple's
+  network; HA can neither trigger their chime nor read them. Tile's third-party
+  API is closed/deprecated. So we don't use either.
+- **HA-ringable tags:** Bluetooth tags HA can chime on demand — Chipolo's
+  "works with Home Assistant" models and **Pebblebee** are the easy path;
+  cheap iBeacon-class tags with a ring characteristic also work.
+- **ESPHome Bluetooth proxy:** a ~$5 ESP32 flashed as a
+  [Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html) extends
+  HA's Bluetooth range into every room. Put **one per room where things go
+  missing** (kitchen, hallway, bedroom); they double as presence sensors.
+
+### Setup (pointer level)
+1. **Flash a Bluetooth proxy.** Follow the ESPHome
+   [Bluetooth proxy guide](https://esphome.io/components/bluetooth_proxy.html)
+   (or install the ready-made *ESPHome Bluetooth Proxy* project from
+   [esphome.io/projects](https://esphome.io/projects/)). Adopt it in HA; the
+   [Bluetooth integration](https://www.home-assistant.io/integrations/bluetooth/)
+   picks it up as a remote adapter. One per key room.
+2. **Add the tag.** Pair/adopt the Chipolo/Pebblebee tag so it shows up as a
+   device in Settings → Devices & Services.
+3. **Find the ring entity.** On the tag's device page, look for a **button**
+   entity that rings it (e.g. `button.chipolo_keys_ring`) — that's the one to
+   press. (A DIY ESP32 finder exposes an `esphome.*` service instead.)
+4. **Wire it in.** In `packages/elder_assist.yaml`, uncomment the matching
+   `# EDIT` line in `script.find_keys` (and `find_wallet`) and set the entity /
+   service to yours. Restart or reload scripts.
+
+### Fallbacks
+- **RSSI last-seen:** even without a ring, a BLE tag heard by a proxy gives a
+  rough "last seen in the kitchen" — expose the tag's signal/area as a sensor
+  and add it to the dashboard for a graceful degrade.
+- **Zero-hardware baseline:** the "I put the keys on the counter" /
+  "where did I put the keys" voice notes need no tags at all — and the finder
+  scripts already speak that note when a tag can't be heard.
+
+The PWA's Find My Things buttons simply call these two scripts over HA's REST
+API, so the elder's experience is one giant button per item.
+
+## 8. Weather & seasonal
+
+Two blueprints add elder-specific weather awareness and recurring seasonal
+nudges. **Prerequisite:** any weather integration providing a `weather.*`
+entity — the built-in **[Met.no](https://www.home-assistant.io/integrations/met/)**
+ships with Home Assistant and needs only your location, so there's nothing to
+install.
+
+- **ElderAssist — Weather guardian (`weather_safety.yaml`)** — a morning
+  forecast check (default 07:30) plus a live severe-weather trigger. It reads
+  the daily forecast via `weather.get_forecasts` and speaks plain-words
+  guidance: **heat** days (drink water, avoid midday sun, keep the AC on →
+  announce + notify caregiver), **ice/freeze** ("the sidewalk may be icy, don't
+  go out for the mail until it warms" → announce), and **snow** in the forecast
+  (announce + notify caregiver + fire an event — see below).
+- **ElderAssist — Seasonal chore reminder (`seasonal_chore_reminder.yaml`)** —
+  one automation per recurring chore: pick the months and day, and it announces,
+  optionally notifies, and optionally adds the chore to a to-do list
+  (`todo.add_item`). Examples: gutters (Oct), furnace filter (quarterly), smoke-
+  detector batteries (Mar + Nov), snow-plow contract (Oct), mowing contract
+  (Apr). Point its **To-do list** input at `todo.projects` (create a second
+  Local To-do list named *Projects* — see the package's to-do guidance note).
+  Note: a monthly chore whose last item was never checked off may be added
+  twice; that's accepted (just delete the extra).
+
+### Event contract: `elder_assist_snow_forecast`
+When the weather guardian sees snow, it fires a Home Assistant **event** so any
+downstream flow (a Hermes seasonal-chores automation, another blueprint, a
+notification) can react — e.g. arrange the plow / shoveling:
+
+```yaml
+event_type: elder_assist_snow_forecast
+event_data:
+  weather_entity: weather.home     # the entity that saw snow
+  condition: snowy                 # forecast/current condition string
+  forecast_low: -2                 # today's low, or null if unavailable
+  forecast_high: 1                 # today's high, or null if unavailable
+  source: morning                  # "morning" | "severe" (which trigger fired)
+```
+
+To react, add an automation with an **Event** trigger on
+`event_type: elder_assist_snow_forecast`. (The seasonal_chore_reminder
+blueprint itself runs on the calendar; this event is the *weather-driven* path.)
+
+## 9. Test checklist
 
 Say each phrase to a voice satellite (after the wake word) and confirm the
 behavior. Where it matters, watch **Developer Tools → States** / the automation
@@ -233,6 +326,10 @@ traces.
 | Appointment automation morning/evening time | Speaks today's / tomorrow's appointments from the calendar (or "no appointments"). |
 | Tablet: tap **Call for help** | Caregiver `notify.*` receives "Help requested". |
 | Tablet: tap **I'm OK** | `input_button.i_am_ok` press fires (satisfies the wellness check). |
+| Tablet: tap **Find my keys** (Find My Things) | Speakers announce "Ringing your keys now — listen!"; if a "where are the keys" note exists, it's spoken; if a tag ring is wired in, the tag beeps. |
+| Weather guardian morning check on a hot day (set threshold below the forecast high to test) | Speakers announce the heat-safety guidance; caregiver `notify.*` gets a heat warning. |
+| Weather guardian on a freezing / snowy day | Freezing → "the sidewalk may be icy…" announcement. Snow → snow announcement + caregiver notify + an `elder_assist_snow_forecast` event fires (watch Developer Tools → Events, listen for the type). |
+| Seasonal chore on its configured day/month (set today's date to test) | Speakers announce the chore; caregiver `notify.*` gets it; if a to-do list is set, the item appears on `todo.projects`. |
 
 ### Two-medication voice acks
 The **generic** phrase — "I took my medicine/pills" (and "I took my *morning*

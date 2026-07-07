@@ -1,0 +1,291 @@
+# =============================================================================
+# ElderAssist AI — Weather guardian (heat / ice / snow, elder-specific)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES
+#   Two triggers, one brain:
+#     * A morning check (default 07:30) reads TODAY's forecast and warns about
+#       elder-relevant hazards.
+#     * A state-change trigger fires the moment the weather entity flips to a
+#       SEVERE condition (storm, snow, hail, exceptional) for a timely heads-up.
+#   For each hazard it speaks plain-words guidance an older person can act on:
+#     * HEAT day  (forecast high >= heat threshold): drink water, avoid midday
+#       sun, keep the AC on -> announce + notify the caregiver.
+#     * ICE / FREEZE (forecast low <= cold threshold, or a wintry-mix/hail
+#       condition): "the sidewalk may be icy, please don't go out for the mail
+#       until it warms up" -> announce (no caregiver ping; it's advisory).
+#     * SNOW in the forecast (condition contains snow): announce + notify the
+#       caregiver AND fire an event so the seasonal-chores flow can react
+#       (arrange the plow, remind about the snow-shoveling contract).
+#
+# EVENT CONTRACT  (this is the integration point with the seasonal flow)
+#   event_type: elder_assist_snow_forecast
+#   event_data:
+#     weather_entity: <the weather.* entity that saw snow>
+#     condition:      <forecast/current condition string, e.g. "snowy">
+#     forecast_low:   <today's forecast low, or null if unavailable>
+#     forecast_high:  <today's forecast high, or null if unavailable>
+#     source:         "morning" | "severe"   (which trigger fired it)
+#   Anything (a Hermes seasonal-chores automation, another blueprint, a
+#   notification) can listen for this event_type and act. Documented in
+#   ha/README.md ("Weather & seasonal").
+#
+# WHY weather.get_forecasts (not the old attributes)
+#   Modern HA weather entities no longer expose a `forecast` attribute; you must
+#   CALL weather.get_forecasts and read its response_variable. We ask for the
+#   DAILY forecast and read item [0] (today). Every attribute read has a
+#   default() so a missing field (some integrations omit templow / precipitation)
+#   can never error the automation — it just skips that hazard.
+#
+# TEMPERATURE UNITS
+#   Thresholds are compared directly against the forecast temperature in
+#   WHATEVER UNIT your weather entity reports (°F in a US install, °C elsewhere).
+#   The defaults (90 / 32) assume °F — set 32 / 0 for a °C install.
+# =============================================================================
+blueprint:
+  name: ElderAssist — Weather guardian (heat / ice / snow)
+  description: >-
+    Elder-specific weather safety: a morning forecast check plus a severe-weather
+    trigger that announce heat, ice, and snow guidance out loud, notify the
+    caregiver for heat and snow, and fire an elder_assist_snow_forecast event the
+    seasonal-chores flow can react to. Uses weather.get_forecasts (daily) with
+    robust defaults so a missing forecast field never breaks the automation.
+  domain: automation
+  source_url: https://github.com/bedardandy/elder-assist-ai/blob/main/ha/blueprints/automation/elder_assist/weather_safety.yaml
+  input:
+    weather_entity:
+      name: Weather entity
+      description: >-
+        The weather.* entity to read the forecast from (any weather integration;
+        met.no ships with Home Assistant).
+      selector:
+        entity:
+          filter:
+            - domain: weather
+
+    announce_targets:
+      name: Announce on (speakers / TV)
+      description: Media players to speak the guidance through.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
+
+    tts_engine:
+      name: Text-to-speech engine
+      description: The tts.* entity used to speak (e.g. tts.piper).
+      selector:
+        entity:
+          filter:
+            - domain: tts
+
+    notify_service:
+      name: Caregiver notify service
+      description: >-
+        Notify service alerted on a HEAT day and a SNOW forecast, e.g.
+        notify.family_signal or notify.mobile_app_daughter_phone.
+      default: notify.notify
+      selector:
+        text:
+
+    morning_time:
+      name: Morning check time
+      description: When to read today's forecast and warn about hazards.
+      default: "07:30:00"
+      selector:
+        time:
+
+    heat_threshold:
+      name: Heat threshold
+      description: >-
+        Forecast HIGH at or above this triggers the heat-safety guidance. In your
+        weather entity's unit (°F default; 90 assumes °F).
+      default: 90
+      selector:
+        number:
+          min: 60
+          max: 120
+          step: 1
+          mode: box
+
+    cold_threshold:
+      name: Cold / ice threshold
+      description: >-
+        Forecast LOW at or below this triggers the icy-sidewalk guidance. In your
+        weather entity's unit (°F default; 32 assumes °F, use 0 for °C).
+      default: 32
+      selector:
+        number:
+          min: -20
+          max: 50
+          step: 1
+          mode: box
+
+    snow_watch:
+      name: Watch for snow in the forecast
+      description: >-
+        When ON, a snow condition in today's forecast (or a live change to a
+        snowy state) announces, notifies the caregiver, and fires the
+        elder_assist_snow_forecast event for the seasonal-chores flow.
+      default: true
+      selector:
+        boolean:
+
+# A morning check and a severe-weather change can overlap; keep both.
+mode: parallel
+max: 4
+
+triggers:
+  - trigger: time
+    at: !input morning_time
+    id: morning
+  # The moment the weather entity flips INTO a severe condition.
+  - trigger: state
+    entity_id: !input weather_entity
+    to:
+      - lightning
+      - lightning-rainy
+      - hail
+      - pouring
+      - snowy
+      - snowy-rainy
+      - exceptional
+    id: severe
+
+variables:
+  weather_entity: !input weather_entity
+  announce_targets: !input announce_targets
+  notify_service: !input notify_service
+  heat_threshold: !input heat_threshold
+  cold_threshold: !input cold_threshold
+  snow_watch: !input snow_watch
+
+actions:
+  # ---- 1. Pull TODAY's daily forecast (modern service, response_variable) ----
+  - action: weather.get_forecasts
+    target:
+      entity_id: !input weather_entity
+    data:
+      type: daily
+    response_variable: forecast_resp
+
+  # ---- 2. Extract today's hazards, every read defaulted so nothing errors ----
+  - variables:
+      forecast_list: >-
+        {{ forecast_resp[weather_entity].forecast
+           if forecast_resp is mapping
+              and weather_entity in forecast_resp
+              and forecast_resp[weather_entity].forecast is iterable
+           else [] }}
+      today: "{{ forecast_list[0] if forecast_list | count > 0 else {} }}"
+      current_condition: "{{ states(weather_entity) }}"
+      # Today's forecast condition, falling back to the live state.
+      today_condition: "{{ today.condition | default(current_condition) }}"
+      high_temp: "{{ today.temperature | default(none) }}"
+      # Daily low is `templow`; fall back to the high if an entity omits it.
+      low_temp: "{{ today.templow | default(today.temperature) | default(none) }}"
+      # Hazard flags. Numeric reads guard against a missing/None temperature.
+      is_heat: >-
+        {{ high_temp is not none
+           and high_temp | float(-999) >= (heat_threshold | float) }}
+      is_cold: >-
+        {{ (low_temp is not none
+            and low_temp | float(999) <= (cold_threshold | float))
+           or today_condition in ['snowy-rainy', 'hail'] }}
+      is_snow: >-
+        {{ snow_watch
+           and ('snow' in today_condition or 'snow' in current_condition) }}
+
+  # ---- 3a. HEAT day -> guidance + caregiver ---------------------------------
+  - if:
+      - condition: template
+        value_template: "{{ is_heat }}"
+    then:
+      - action: tts.speak
+        target:
+          entity_id: !input tts_engine
+        data:
+          media_player_entity_id: "{{ announce_targets }}"
+          cache: false
+          message: >-
+            It's going to be hot today. Please drink plenty of water, try to stay
+            out of the sun in the middle of the day, and keep the air conditioning
+            on. If you feel dizzy or unwell, call a family member.
+      - if:
+          - condition: template
+            value_template: "{{ notify_service not in [none, ''] }}"
+        then:
+          - action: "{{ notify_service }}"
+            data:
+              title: Heat warning
+              message: >-
+                ElderAssist: a hot day is forecast (high around
+                {{ high_temp }}). Please check that the AC is on and they're
+                drinking water.
+
+  # ---- 3b. ICE / FREEZE -> advisory announcement only -----------------------
+  - if:
+      - condition: template
+        value_template: "{{ is_cold }}"
+    then:
+      - action: tts.speak
+        target:
+          entity_id: !input tts_engine
+        data:
+          media_player_entity_id: "{{ announce_targets }}"
+          cache: false
+          message: >-
+            It's freezing outside and the sidewalk may be icy. Please don't go out
+            for the mail or the bins until it warms up a little. If you do need to
+            go out, take small steps and hold the rail.
+
+  # ---- 3c. SNOW -> guidance + caregiver + event for the seasonal flow -------
+  - if:
+      - condition: template
+        value_template: "{{ is_snow }}"
+    then:
+      - action: tts.speak
+        target:
+          entity_id: !input tts_engine
+        data:
+          media_player_entity_id: "{{ announce_targets }}"
+          cache: false
+          message: >-
+            Snow is in the forecast. Please stay inside where it's warm — someone
+            will make sure the driveway and walk get cleared.
+      - if:
+          - condition: template
+            value_template: "{{ notify_service not in [none, ''] }}"
+        then:
+          - action: "{{ notify_service }}"
+            data:
+              title: Snow forecast
+              message: >-
+                ElderAssist: snow is forecast. Time to arrange the plow / shoveling
+                and make sure the walk gets cleared.
+      # Integration point: the seasonal-chores flow listens for this event.
+      - event: elder_assist_snow_forecast
+        event_data:
+          weather_entity: "{{ weather_entity }}"
+          condition: "{{ today_condition }}"
+          forecast_low: "{{ low_temp }}"
+          forecast_high: "{{ high_temp }}"
+          source: "{{ trigger.id }}"
+
+  # ---- 4. Live severe change -> immediate plain-words heads-up --------------
+  # Only on the state trigger, and only if nothing above already spoke, so we
+  # don't double-announce a snow/heat hazard the forecast branches handled.
+  - if:
+      - condition: template
+        value_template: >-
+          {{ trigger.id == 'severe' and not (is_heat or is_cold or is_snow) }}
+    then:
+      - action: tts.speak
+        target:
+          entity_id: !input tts_engine
+        data:
+          media_player_entity_id: "{{ announce_targets }}"
+          cache: false
+          message: >-
+            The weather is turning bad outside. It's best to stay indoors for now
+            and keep away from the windows during the storm.

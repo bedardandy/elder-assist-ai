@@ -1,0 +1,193 @@
+# =============================================================================
+# ElderAssist AI — Seasonal chore reminder (recurring monthly nudge)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES
+#   On a chosen day of the month, at a chosen time, IF the current month is one
+#   of the months you picked, it:
+#     1. Announces the chore out loud on your speakers.
+#     2. (optional) Sends the caregiver a notify so the household knows it's due.
+#     3. (optional) Adds the chore to a to-do list (todo.add_item) so it can be
+#        checked off — great for the "projects" list a caregiver actually works.
+#
+#   One automation per recurring chore. Pick the months it applies to and the
+#   day-of-month to fire.
+#
+# EXAMPLES (create one automation from this blueprint for each)
+#   * Clean the gutters              -> months: Oct           day: 15
+#   * Change the furnace filter      -> months: Jan Apr Jul Oct (quarterly) day: 1
+#   * Replace smoke-detector batteries -> months: Mar Nov     day: 1
+#   * Confirm the snow-plow contract -> months: Oct           day: 1
+#   * Renew the lawn-mowing contract -> months: Apr           day: 1
+#
+# DUPLICATE TO-DO ITEMS (known, accepted)
+#   There is no cheap, reliable way to tell "this exact chore is already on the
+#   list and still open" from a blueprint. If a chore runs monthly and last
+#   month's item was never checked off, you'll get a SECOND copy. That's
+#   acceptable for these low-frequency nudges — just tick or delete the extra.
+#   (For quarterly/annual chores this almost never happens in practice.)
+#
+# NOTE ON day-of-month
+#   Use a day <= 28 if you want a chore to fire in EVERY selected month; days
+#   29–31 don't exist in some months and that month's run is simply skipped.
+# =============================================================================
+blueprint:
+  name: ElderAssist — Seasonal chore reminder
+  description: >-
+    On a chosen day and time, if the current month is one you selected, announce
+    a seasonal chore, optionally notify the caregiver, and optionally add it to a
+    to-do list. One automation per recurring chore (gutters, furnace filter,
+    smoke-detector batteries, snow/mowing contracts).
+  domain: automation
+  source_url: https://github.com/bedardandy/elder-assist-ai/blob/main/ha/blueprints/automation/elder_assist/seasonal_chore_reminder.yaml
+  input:
+    chore_name:
+      name: Chore
+      description: >-
+        Spoken aloud and used as the to-do item text, e.g. "clean the gutters"
+        or "change the furnace filter".
+      selector:
+        text:
+
+    months:
+      name: Months to remind
+      description: Pick every month this chore should fire in.
+      default:
+        - "10"
+      selector:
+        select:
+          multiple: true
+          mode: list
+          options:
+            - label: January
+              value: "1"
+            - label: February
+              value: "2"
+            - label: March
+              value: "3"
+            - label: April
+              value: "4"
+            - label: May
+              value: "5"
+            - label: June
+              value: "6"
+            - label: July
+              value: "7"
+            - label: August
+              value: "8"
+            - label: September
+              value: "9"
+            - label: October
+              value: "10"
+            - label: November
+              value: "11"
+            - label: December
+              value: "12"
+
+    day_of_month:
+      name: Day of the month
+      description: Which day to fire on (use 1–28 to hit every selected month).
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 31
+          step: 1
+          mode: box
+
+    reminder_time:
+      name: Time of day
+      description: When on that day to announce the chore.
+      default: "10:00:00"
+      selector:
+        time:
+
+    announce_targets:
+      name: Announce on (speakers / TV)
+      description: Media players to speak the reminder through.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
+
+    tts_engine:
+      name: Text-to-speech engine
+      description: The tts.* entity used to speak (e.g. tts.piper).
+      selector:
+        entity:
+          filter:
+            - domain: tts
+
+    notify_service:
+      name: Caregiver notify service (optional)
+      description: >-
+        Optional notify service to also send the reminder as text, e.g.
+        notify.family_signal. Leave blank to only speak it.
+      default: notify.notify
+      selector:
+        text:
+
+    todo_entity:
+      name: To-do list (optional)
+      description: >-
+        Optional to-do list to add the chore to (e.g. todo.projects). Leave
+        blank to skip. See the duplicate-items note in the file header.
+      default:
+      selector:
+        entity:
+          filter:
+            - domain: todo
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: time
+    at: !input reminder_time
+
+variables:
+  chore_name: !input chore_name
+  months: !input months
+  day_of_month: !input day_of_month
+  announce_targets: !input announce_targets
+  notify_service: !input notify_service
+  todo_entity: !input todo_entity
+
+conditions:
+  # Right day AND the current month is one of the selected months. Month values
+  # are strings ("1".."12") from the select; compare as strings.
+  - condition: template
+    value_template: >-
+      {{ now().day == (day_of_month | int)
+         and (now().month | string) in months }}
+
+actions:
+  # ---- 1. Announce the chore ------------------------------------------------
+  - action: tts.speak
+    target:
+      entity_id: !input tts_engine
+    data:
+      media_player_entity_id: "{{ announce_targets }}"
+      cache: false
+      message: "A seasonal reminder: it's time to {{ chore_name }}."
+
+  # ---- 2. Notify the caregiver (optional) -----------------------------------
+  - if:
+      - condition: template
+        value_template: "{{ notify_service not in [none, ''] }}"
+    then:
+      - action: "{{ notify_service }}"
+        data:
+          title: Seasonal chore
+          message: "ElderAssist seasonal reminder: {{ chore_name }}."
+
+  # ---- 3. Add to a to-do list (optional; may duplicate — see header) --------
+  - if:
+      - condition: template
+        value_template: "{{ todo_entity not in [none, ''] }}"
+    then:
+      - action: todo.add_item
+        target:
+          entity_id: !input todo_entity
+        data:
+          item: "{{ chore_name }}"

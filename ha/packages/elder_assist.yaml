@@ -233,6 +233,90 @@ script:
         data:
           message: "Reminder: {{ message }}."
 
+  # ---------------------------------------------------------------------------
+  # find_keys / find_wallet — "make my keys/wallet beep" (Find My Things page).
+  # These are THIN WRAPPERS the PWA calls. Out of the box they only ANNOUNCE
+  # (so they load and work with NO tracker configured) plus, when the elder has
+  # a "where did I put" note for that thing, they speak the last-seen location
+  # as a fallback. To make a physical tag actually ring, wire in ONE ring action
+  # below — see the # EDIT block in each. Full setup: ha/README.md
+  # ("Finding things: Bluetooth trackers") and docs/DECISIONS.md D12.
+  # ---------------------------------------------------------------------------
+  find_keys:
+    alias: Find Keys
+    icon: mdi:key
+    mode: single
+    sequence:
+      # 1. Always announce first — works before any tag exists.
+      - action: script.elder_announce
+        data:
+          message: "Ringing your keys now — listen!"
+
+      # 2. EDIT: make the physical tag ring. Pick ONE pattern, uncomment it, and
+      #    set the entity/service to yours (find it after adding the tag — see
+      #    ha/README.md). Leave BOTH commented and the script still works
+      #    (announce + spoken fallback below), it just won't beep a tag.
+      #
+      #    Pattern A — a "works-with-HA" tag (Chipolo/Pebblebee) exposes a
+      #    button entity that rings it:
+      # - action: button.press
+      #   target:
+      #     entity_id: button.chipolo_keys_ring        # EDIT: your tag's ring button
+      #
+      #    Pattern B — a DIY ESP32/ESPHome key-finder exposes a service:
+      # - action: esphome.keyfinder_ring               # EDIT: your ESPHome ring service
+
+      # 3. Spoken fallback: if the elder told us where the keys are, read it back
+      #    (helps even when a tag is out of range or not set up).
+      - if:
+          - condition: template
+            value_template: >-
+              {{ states('input_text.last_thing_put_away') | lower == 'keys'
+                 and states('input_text.last_thing_location')
+                     not in ['unknown', 'unavailable', ''] }}
+        then:
+          - action: script.elder_announce
+            data:
+              message: >-
+                If you can't hear them, the last place you told me was
+                {{ states('input_text.last_thing_location') }}.
+
+  find_wallet:
+    alias: Find Wallet
+    icon: mdi:wallet
+    mode: single
+    sequence:
+      # 1. Always announce first — works before any tag exists.
+      - action: script.elder_announce
+        data:
+          message: "Ringing your wallet now — listen!"
+
+      # 2. EDIT: make the physical tag ring. Pick ONE pattern, uncomment it, and
+      #    set the entity/service to yours. Leave BOTH commented and the script
+      #    still works (announce + spoken fallback below).
+      #
+      #    Pattern A — a "works-with-HA" tag (Chipolo/Pebblebee) ring button:
+      # - action: button.press
+      #   target:
+      #     entity_id: button.chipolo_wallet_ring      # EDIT: your tag's ring button
+      #
+      #    Pattern B — a DIY ESP32/ESPHome finder service:
+      # - action: esphome.walletfinder_ring            # EDIT: your ESPHome ring service
+
+      # 3. Spoken fallback: read back the last place the wallet was noted.
+      - if:
+          - condition: template
+            value_template: >-
+              {{ states('input_text.last_thing_put_away') | lower == 'wallet'
+                 and states('input_text.last_thing_location')
+                     not in ['unknown', 'unavailable', ''] }}
+        then:
+          - action: script.elder_announce
+            data:
+              message: >-
+                If you can't hear it, the last place you told me was
+                {{ states('input_text.last_thing_location') }}.
+
 # -----------------------------------------------------------------------------
 # Voice intents (intent_script)
 # -----------------------------------------------------------------------------
@@ -318,6 +402,13 @@ intent_script:
 # name it "Reminders". That yields todo.reminders, which the dashboard's
 # to-do-list card and Hermes/voice "add to my list" flows write to.
 # (The Local To-do integration cannot be set up from YAML/packages.)
+#
+# ALSO create a second Local To-do list named "Projects" -> yields todo.projects.
+# This is the list the seasonal_chore_reminder blueprint writes to (gutters,
+# furnace filter, smoke-detector batteries, snow/mowing contracts): a caregiver
+# actually works the Projects list, separate from the elder's day-to-day
+# Reminders. Point each seasonal_chore_reminder automation's "To-do list" input
+# at todo.projects.
 
 # -----------------------------------------------------------------------------
 # Hub-down watchdog (dead-man's switch) — COMMENTED OUT, opt-in
