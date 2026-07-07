@@ -1,0 +1,85 @@
+# ============================================================================
+# ElderAssist AI — CI validation
+# ============================================================================
+# Fast, secret-free checks that keep the deployment layer honest:
+#   1. `docker compose config` renders for the core AND every profile.
+#   2. shellcheck passes on all shell scripts.
+#   3. yamllint passes on docker/ and (if present) ha/.
+#   4. The kiosk PWA entrypoint (pwa/index.html) exists and looks like HTML.
+# No secrets, no image pulls, no deploys.
+# ============================================================================
+name: validate
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- Synthesize a .env so compose has values to interpolate -----------
+      - name: Synthesize .env
+        run: cp .env.example .env
+
+      # --- 1. Compose config renders (core + each profile) ------------------
+      # `docker compose` ships on ubuntu-latest runners. `config -q` fully
+      # parses and validates interpolation without starting anything.
+      - name: Validate compose (core)
+        run: docker compose --env-file .env -f docker/docker-compose.yml config -q
+
+      - name: Validate compose (each profile)
+        run: |
+          for p in voice inventory grocy webui; do
+            echo "--- profile: $p ---"
+            docker compose --env-file .env -f docker/docker-compose.yml --profile "$p" config -q
+          done
+
+      - name: Validate compose (all profiles + GPU override)
+        run: |
+          docker compose --env-file .env \
+            -f docker/docker-compose.yml \
+            -f docker/docker-compose.gpu.yml \
+            --profile voice --profile inventory --profile grocy --profile webui \
+            config -q
+
+      # --- 2. shellcheck on all shell scripts -------------------------------
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: shellcheck
+        run: |
+          shopt -s nullglob
+          files=(setup.sh scripts/*.sh)
+          echo "Checking: ${files[*]}"
+          shellcheck "${files[@]}"
+
+      # --- 3. yamllint on docker/ and ha/ (ha/ may not exist yet) -----------
+      - name: Install yamllint
+        run: sudo apt-get install -y yamllint
+
+      - name: yamllint
+        run: |
+          targets=(docker/)
+          if [ -d ha ]; then targets+=(ha/); fi
+          echo "Linting: ${targets[*]}"
+          yamllint "${targets[@]}"
+
+      # --- 4. Basic HTML check of the kiosk PWA entrypoint ------------------
+      # The pwa/ workstream owns the file; here we just confirm it exists and
+      # is HTML so the kiosk container has something to serve.
+      - name: Check pwa/index.html
+        run: |
+          if [ ! -f pwa/index.html ]; then
+            echo "::warning::pwa/index.html not found yet (the pwa/ workstream provides it)."
+            exit 0
+          fi
+          if ! grep -qi '<html' pwa/index.html; then
+            echo "::error::pwa/index.html exists but has no <html> tag."
+            exit 1
+          fi
+          echo "pwa/index.html looks like HTML."

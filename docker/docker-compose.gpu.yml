@@ -1,0 +1,42 @@
+# ============================================================================
+# ElderAssist AI — NVIDIA GPU override
+# ============================================================================
+# Adds GPU access to the heavy services (Ollama, and Whisper when the voice
+# profile is on). Layer it ON TOP of the base file:
+#
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.gpu.yml up -d
+#
+# The Makefile's GPU note and docs/INSTALL.md show how to make this the
+# default. Requirements:
+#   - an NVIDIA GPU with a recent driver, and
+#   - the NVIDIA Container Toolkit installed on the host
+#     (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/).
+# On Windows this means Docker Desktop with WSL2 + the NVIDIA WSL driver.
+#
+# Without the toolkit these reservations cause the containers to fail to
+# start — only use this override on a machine that actually has an NVIDIA GPU.
+# ============================================================================
+
+services:
+
+  ollama:
+    # Ollama auto-detects CUDA once the GPU is reserved into the container.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+
+  whisper:
+    # faster-whisper uses the GPU for much faster transcription.
+    # NOTE: also set WHISPER_MODEL to a CUDA-friendly size (e.g. small-int8 or
+    # medium-int8) in .env — the GPU makes the larger models practical.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]

@@ -1,0 +1,42 @@
+# ============================================================================
+# ElderAssist AI — relaxed yamllint rules
+# ============================================================================
+# Tuned so ordinary Home Assistant YAML (which uses `on:` keys, long template
+# lines, and document-level comments) does not trip the linter, while still
+# catching real mistakes like duplicate keys and broken indentation.
+# ============================================================================
+extends: default
+
+rules:
+  # HA templates and URLs get long; 120 is plenty, and warn (not error).
+  line-length:
+    max: 120
+    level: warning
+    allow-non-breakable-words: true
+
+  # Home Assistant automations legitimately use `on:` / `off:` / `yes:` keys.
+  truthy: disable
+
+  # Don't be fussy about comment formatting in hand-written config.
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1
+  comments-indentation: disable
+
+  # `---` document start is optional for our files.
+  document-start: disable
+
+  # A trailing newline is nice-to-have, not a failure.
+  new-line-at-end-of-file: disable
+
+  # Allow both true block styles and empty values (common in HA configs).
+  empty-values: disable
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+
+  # Indentation: 2 spaces, but don't force indentation of sequences.
+  indentation:
+    spaces: 2
+    indent-sequences: consistent

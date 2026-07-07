@@ -1,0 +1,270 @@
+# ============================================================================
+# ElderAssist AI — Docker Compose stack
+# ============================================================================
+# One box, one file. Bring up the core (Home Assistant + Ollama + kiosk PWA)
+# with `docker compose up -d`; add optional pieces with profiles.
+#
+#   Core (no profile):   docker compose up -d
+#   With voice:          docker compose --profile voice up -d
+#   Everything:          docker compose --profile voice --profile inventory \
+#                                       --profile grocy --profile webui up -d
+#
+# Easier: run `./setup.sh` (or `.\setup.ps1`) from the repo root — it writes
+# your .env, picks profiles, and pulls the LLM model for you.
+#
+# All settings come from ../.env. Run compose from the repo root or the docker/
+# directory; `env_file` paths below assume you launch from either.
+#
+# --- A NOTE ON IMAGE TAGS ---------------------------------------------------
+# We use the tags each upstream recommends for a home install (`stable`,
+# `latest`, `main`). That means `docker compose pull` tracks upstream. For a
+# rock-stable family box you may prefer to PIN to a specific version once it
+# works — replace e.g. `:stable` with `:2026.7` and update deliberately.
+#
+# --- A NOTE ON NETWORKING (READ IF YOU ARE ON macOS OR WINDOWS) -------------
+# Home Assistant uses `network_mode: host` below. That is the standard,
+# recommended setup on LINUX: HA needs host networking to discover Cast
+# devices, TVs, and voice satellites via mDNS/broadcast, and it reaches the
+# other containers at localhost:<published port>.
+#
+# Host networking DOES NOT WORK on Docker Desktop for macOS or Windows. On
+# those platforms you must, in the `homeassistant` service:
+#   1. comment out the `network_mode: host` line, and
+#   2. uncomment the `ports:` and `networks:` blocks marked "macOS/Windows".
+# Home Assistant then reaches the voice/LLM containers by their SERVICE NAME
+# (ollama, whisper, piper, openwakeword) instead of localhost. Device
+# auto-discovery is limited on Desktop; add integrations by IP. Full details
+# in docs/INSTALL.md.
+# ============================================================================
+
+name: elderassist
+
+# ---------------------------------------------------------------------------
+# Shared network. Home Assistant on Linux ignores this (it is on the host),
+# but every other service lives here and can talk to its neighbours by name.
+# ---------------------------------------------------------------------------
+networks:
+  elderassist:
+    driver: bridge
+
+# ---------------------------------------------------------------------------
+# Named volumes hold ALL persistent state. Nothing important lives in a
+# container's filesystem, so `docker compose down` never loses your data and
+# the backup script can archive these by name.
+# ---------------------------------------------------------------------------
+volumes:
+  ha_config:          # Home Assistant configuration, automations, database
+  ollama_models:      # downloaded LLM weights (large — GBs per model)
+  whisper_data:       # cached speech-to-text model
+  piper_data:         # cached text-to-speech voice
+  openwakeword_data:  # wake-word models
+  homebox_data:       # HomeBox database + uploaded photos/manuals
+  grocy_data:         # Grocy database
+  openwebui_data:     # Open WebUI settings + chat history
+
+services:
+
+  # =========================================================================
+  # CORE — always started (no profile needed)
+  # =========================================================================
+
+  # --- Home Assistant: the deterministic automation hub --------------------
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: elderassist-homeassistant
+    restart: unless-stopped
+    # LINUX (default & recommended): host networking for mDNS/Cast/discovery.
+    # HA is reachable on HA_PORT (default 8123). Comment this out on macOS/Win.
+    network_mode: host
+    # macOS / WINDOWS: comment `network_mode: host` above, then UNCOMMENT the
+    # two blocks below so HA is reachable and can see the other containers.
+    # ports:
+    #   - "${HA_PORT:-8123}:8123"
+    # networks:
+    #   - elderassist
+    volumes:
+      - ha_config:/config
+      # HA reads the timezone from /etc/localtime as well as TZ.
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      TZ: ${TZ:-America/New_York}
+    healthcheck:
+      # HA image ships curl; a 200/30x on the frontend means it is up.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8123/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # --- Ollama: local LLM serving -------------------------------------------
+  ollama:
+    image: ollama/ollama:latest   # upstream ships only :latest for home use
+    container_name: elderassist-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      TZ: ${TZ:-America/New_York}
+    networks:
+      - elderassist
+    healthcheck:
+      # `ollama list` succeeds only once the API server is accepting requests.
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # --- Kiosk PWA: the six-giant-button elder app ---------------------------
+  # Serves the static files another workstream builds in ../pwa, read-only.
+  kiosk:
+    image: nginx:alpine
+    container_name: elderassist-kiosk
+    restart: unless-stopped
+    ports:
+      - "${KIOSK_PORT:-8880}:80"
+    volumes:
+      - ../pwa:/usr/share/nginx/html:ro
+    environment:
+      TZ: ${TZ:-America/New_York}
+    networks:
+      - elderassist
+    healthcheck:
+      # busybox wget ships in nginx:alpine.
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # =========================================================================
+  # VOICE profile — fully local wake word + STT + TTS (Wyoming protocol)
+  #   docker compose --profile voice up -d
+  # Point Home Assistant's Wyoming integrations at these (see docs/INSTALL.md).
+  # =========================================================================
+
+  # --- faster-whisper: speech-to-text --------------------------------------
+  whisper:
+    image: rhasspy/wyoming-whisper:latest
+    container_name: elderassist-whisper
+    restart: unless-stopped
+    profiles: ["voice"]
+    command: >
+      --model ${WHISPER_MODEL:-base-int8}
+      --language ${WHISPER_LANGUAGE:-en}
+    ports:
+      - "${WHISPER_PORT:-10300}:10300"
+    volumes:
+      - whisper_data:/data
+    environment:
+      TZ: ${TZ:-America/New_York}
+    networks:
+      - elderassist
+
+  # --- Piper: text-to-speech -----------------------------------------------
+  piper:
+    image: rhasspy/wyoming-piper:latest
+    container_name: elderassist-piper
+    restart: unless-stopped
+    profiles: ["voice"]
+    command: >
+      --voice ${PIPER_VOICE:-en_US-lessac-medium}
+    ports:
+      - "${PIPER_PORT:-10200}:10200"
+    volumes:
+      - piper_data:/data
+    environment:
+      TZ: ${TZ:-America/New_York}
+    networks:
+      - elderassist
+
+  # --- openWakeWord: local wake-word detection -----------------------------
+  openwakeword:
+    image: rhasspy/wyoming-openwakeword:latest
+    container_name: elderassist-openwakeword
+    restart: unless-stopped
+    profiles: ["voice"]
+    command: >
+      --preload-model ${WAKEWORD_MODEL:-ok_nabu}
+    ports:
+      - "${WAKEWORD_PORT:-10400}:10400"
+    volumes:
+      - openwakeword_data:/data
+    environment:
+      TZ: ${TZ:-America/New_York}
+    networks:
+      - elderassist
+
+  # =========================================================================
+  # INVENTORY profile — HomeBox: appliances, serials, warranties, manuals
+  #   docker compose --profile inventory up -d
+  # =========================================================================
+  homebox:
+    image: ghcr.io/sysadminsmedia/homebox:latest
+    container_name: elderassist-homebox
+    restart: unless-stopped
+    profiles: ["inventory"]
+    ports:
+      - "${HOMEBOX_PORT:-7745}:7745"
+    volumes:
+      - homebox_data:/data
+    environment:
+      TZ: ${TZ:-America/New_York}
+      HBOX_OPTIONS_ALLOW_REGISTRATION: "false"  # caregiver creates accounts only
+      HBOX_STORAGE_DATA: /data
+      HBOX_STORAGE_SQLITE_URL: /data/homebox.db?_pragma=busy_timeout=999&_pragma=journal_mode=WAL&_fk=1
+    networks:
+      - elderassist
+
+  # =========================================================================
+  # GROCY profile — Grocy: medication stock, groceries, chores
+  #   docker compose --profile grocy up -d
+  # =========================================================================
+  grocy:
+    image: lscr.io/linuxserver/grocy:latest
+    container_name: elderassist-grocy
+    restart: unless-stopped
+    profiles: ["grocy"]
+    ports:
+      - "${GROCY_PORT:-9283}:80"
+    volumes:
+      - grocy_data:/config
+    environment:
+      TZ: ${TZ:-America/New_York}
+      PUID: "1000"
+      PGID: "1000"
+    networks:
+      - elderassist
+
+  # =========================================================================
+  # WEBUI profile — Open WebUI: optional operator chat UI for Ollama
+  #   docker compose --profile webui up -d
+  # This is a caregiver/operator tool, NOT the elder surface (that is kiosk).
+  # =========================================================================
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: elderassist-open-webui
+    restart: unless-stopped
+    profiles: ["webui"]
+    ports:
+      - "${OPENWEBUI_PORT:-3000}:8080"
+    volumes:
+      - openwebui_data:/app/backend/data
+    environment:
+      TZ: ${TZ:-America/New_York}
+      # Reach Ollama by its service name on the shared network.
+      OLLAMA_BASE_URL: http://ollama:11434
+      WEBUI_AUTH: "true"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - elderassist
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

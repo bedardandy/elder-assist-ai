@@ -1,0 +1,41 @@
+# --- ElderAssist local state (never commit) --------------------------------
+# Your environment file: holds timezone, ports, and later possibly secrets.
+.env
+.env.local
+
+# Local backups produced by scripts/backup.sh
+backups/
+*.tar.gz
+
+# Home Assistant secrets (the ha/ workstream may generate these)
+ha/secrets.yaml
+ha/.storage/
+ha/*.db
+ha/*.db-shm
+ha/*.db-wal
+ha/*.log
+ha/home-assistant_v2.db*
+
+# --- Editor / OS cruft -----------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# --- Node / PWA tooling (if a workstream adds a build step) -----------------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+.cache/
+
+# --- Python (helper scripts / tooling) -------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
