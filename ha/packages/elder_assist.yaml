@@ -1,0 +1,290 @@
+# =============================================================================
+# ElderAssist AI — Home Assistant package
+# -----------------------------------------------------------------------------
+# This is a Home Assistant "package": one file that bundles the shared helpers,
+# scripts and voice intents the ElderAssist blueprints and dashboard rely on.
+#
+# Install: copy this file to <config>/packages/elder_assist.yaml and add to
+# configuration.yaml (once):
+#
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# Then restart Home Assistant. See ha/README.md for the full walkthrough.
+#
+# EDIT MARKERS: search this file for "# EDIT" — those lines reference entities
+# that are specific to your house (your media players, your TTS engine).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Helpers (created here so they exist on boot; no UI clicks required)
+# -----------------------------------------------------------------------------
+input_boolean:
+  # Flipped ON when the elder acknowledges a dose (by voice, dashboard tile, or
+  # the notification button). The medication_reminder blueprint waits on this.
+  medication_acknowledged:
+    name: Medication acknowledged
+    icon: mdi:pill
+  # A second slot, for a household that tracks two independent medications.
+  medication_acknowledged_2:
+    name: Medication acknowledged (second)
+    icon: mdi:pill-multiple
+
+input_text:
+  # "Where did I put the ...": the last item the elder told us about, and where.
+  last_thing_put_away:
+    name: Last thing put away
+    max: 255
+    icon: mdi:help-box
+  last_thing_location:
+    name: Last thing location
+    max: 255
+    icon: mdi:map-marker
+
+input_button:
+  # The elder taps this (dashboard) or says "I'm okay" to confirm wellness.
+  i_am_ok:
+    name: I am OK
+    icon: mdi:hand-wave
+
+counter:
+  # Bumped by automations when a reminder is missed / escalated. Surfaced on the
+  # caregiver dashboard so a bad week is visible at a glance.
+  reminders_missed:
+    name: Reminders missed
+    icon: mdi:alert-circle
+    step: 1
+    minimum: 0
+
+# -----------------------------------------------------------------------------
+# Announce target group
+# -----------------------------------------------------------------------------
+# A plain group of the media players ElderAssist should talk through by default.
+# Scripts below expand this group to a list of entity_ids for tts.speak.
+# EDIT: replace the placeholder entities with your real media players.
+group:
+  elder_announce_targets:
+    name: Elder announce targets
+    entities:
+      - media_player.living_room_speaker   # EDIT
+      - media_player.kitchen_speaker        # EDIT
+
+# -----------------------------------------------------------------------------
+# Scripts
+# -----------------------------------------------------------------------------
+script:
+  # ---------------------------------------------------------------------------
+  # elder_announce — speak a message through the announce group (or given
+  # targets) using tts.speak. Central "say this out loud" helper.
+  # ---------------------------------------------------------------------------
+  elder_announce:
+    alias: Elder Announce
+    icon: mdi:bullhorn
+    mode: parallel
+    max: 10
+    fields:
+      message:
+        description: What to say out loud.
+        example: It's time for your morning pills.
+        required: true
+        selector:
+          text:
+      targets:
+        description: >-
+          Optional media players to announce on. Defaults to the
+          group.elder_announce_targets group when omitted.
+        selector:
+          entity:
+            multiple: true
+            filter:
+              - domain: media_player
+    sequence:
+      - variables:
+          # Use explicit targets if provided, else expand the default group.
+          tts_targets: >-
+            {% if targets is defined and targets %}
+              {{ targets }}
+            {% else %}
+              {{ expand('group.elder_announce_targets')
+                 | map(attribute='entity_id') | list }}
+            {% endif %}
+      - action: tts.speak
+        target:
+          entity_id: tts.piper   # EDIT: your TTS engine entity (e.g. tts.piper)
+        data:
+          media_player_entity_id: "{{ tts_targets }}"
+          message: "{{ message }}"
+          cache: true
+
+  # ---------------------------------------------------------------------------
+  # elder_cast_instruction — put something on the TV screen.
+  # Two mechanisms, pick per call:
+  #   * image_url given  -> media_player.play_media casts that image/URL
+  #     directly (works on any Cast/DLNA screen, good for a photo or a
+  #     "how to use the washing machine" card hosted anywhere).
+  #   * image_url omitted -> cast.show_lovelace_view casts a Lovelace
+  #     dashboard view (Google Cast only; richest, live, interactive card).
+  # ---------------------------------------------------------------------------
+  elder_cast_instruction:
+    alias: Elder Cast Instruction
+    icon: mdi:television-play
+    mode: parallel
+    max: 5
+    fields:
+      target:
+        description: The Chromecast / Android TV media_player to cast to.
+        required: true
+        selector:
+          entity:
+            filter:
+              - domain: media_player
+      dashboard_path:
+        description: >-
+          Lovelace dashboard URL path to cast (e.g. lovelace-elder). Used with
+          view_path when no image_url is given.
+        example: lovelace-elder
+        selector:
+          text:
+      view_path:
+        description: The view path or index within the dashboard (e.g. help).
+        example: help
+        selector:
+          text:
+      image_url:
+        description: >-
+          Optional. A photo / instruction-card image or web URL to cast
+          straight to the screen instead of a dashboard.
+        example: https://example.local/cards/washing-machine.jpg
+        selector:
+          text:
+    sequence:
+      - choose:
+          # Option B: cast an image / URL straight to the screen.
+          - conditions: "{{ image_url is defined and image_url }}"
+            sequence:
+              - action: media_player.play_media
+                target:
+                  entity_id: "{{ target }}"
+                data:
+                  media_content_id: "{{ image_url }}"
+                  media_content_type: image/jpeg
+        # Option A: cast a Lovelace dashboard view (Google Cast only).
+        default:
+          - action: cast.show_lovelace_view
+            data:
+              entity_id: "{{ target }}"
+              dashboard_path: "{{ dashboard_path }}"
+              view_path: "{{ view_path }}"
+
+  # ---------------------------------------------------------------------------
+  # remind_me_in — a one-shot "remind me in N minutes" timer.
+  # mode: parallel means many concurrent reminders coexist; each waits out its
+  # own templated delay then announces. Simple, robust, survives nothing-else.
+  # (For reminders that must survive a reboot, use an appointment/calendar
+  # entry instead — a delay is lost on restart, which is fine for "in 10 min".)
+  # ---------------------------------------------------------------------------
+  remind_me_in:
+    alias: Remind Me In
+    icon: mdi:timer-outline
+    mode: parallel
+    max: 25
+    fields:
+      minutes:
+        description: How many minutes from now to remind.
+        example: 10
+        required: true
+        selector:
+          number:
+            min: 1
+            max: 1440
+            step: 1
+            unit_of_measurement: minutes
+            mode: box
+      message:
+        description: What to remind about.
+        example: take the chicken out of the oven
+        required: true
+        selector:
+          text:
+    sequence:
+      - delay:
+          minutes: "{{ minutes | int }}"
+      - action: script.elder_announce
+        data:
+          message: "Reminder: {{ message }}."
+
+# -----------------------------------------------------------------------------
+# Voice intents (intent_script)
+# -----------------------------------------------------------------------------
+# These implement the custom sentences defined in
+# custom_sentences/en/elder_assist.yaml. Slot values from the sentences arrive
+# as top-level template variables (e.g. {{ minutes }}, {{ thing }}).
+# -----------------------------------------------------------------------------
+intent_script:
+  # "remind me to {message} in {minutes} minutes"
+  ElderRemindMeIn:
+    action:
+      - action: script.remind_me_in
+        data:
+          minutes: "{{ minutes | int }}"
+          message: "{{ message }}"
+    speech:
+      text: "Okay, I'll remind you to {{ message }} in {{ minutes }} minutes."
+
+  # "I took my medicine | pills | medication | meds"
+  ElderMedicationTaken:
+    action:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.medication_acknowledged
+    speech:
+      text: Great, I've marked your medication as taken.
+
+  # "I put the {thing} {prep} {location}"
+  ElderStoreThingLocation:
+    action:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.last_thing_put_away
+        data:
+          value: "{{ thing }}"
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.last_thing_location
+        data:
+          value: "{{ prep }} {{ location }}"
+    speech:
+      text: "Got it. Your {{ thing }} is {{ prep }} {{ location }}."
+
+  # "where did I put the {thing}" / "where is the {thing}"
+  ElderWhereDidIPut:
+    speech:
+      text: >-
+        {% set noted = states('input_text.last_thing_put_away') %}
+        {% set where = states('input_text.last_thing_location') %}
+        {% if noted | lower == thing | lower and where not in ['unknown', 'unavailable', ''] %}
+          You put the {{ thing }} {{ where }}.
+        {% elif noted not in ['unknown', 'unavailable', ''] %}
+          I don't have a note about the {{ thing }}. The last thing I noted was
+          the {{ noted }}, which is {{ where }}.
+        {% else %}
+          I'm sorry, I don't have a note about where the {{ thing }} is.
+        {% endif %}
+
+  # "I'm okay" / "I am fine"
+  ElderImOkay:
+    action:
+      - action: input_button.press
+        target:
+          entity_id: input_button.i_am_ok
+    speech:
+      text: Thank you for letting me know you're okay.
+
+# -----------------------------------------------------------------------------
+# Reminders to-do list (guidance only — packages cannot create it)
+# -----------------------------------------------------------------------------
+# The Reminders list on the dashboard uses a todo.* entity. Create it once via
+# the UI: Settings -> Devices & Services -> Add Integration -> "Local To-do",
+# name it "Reminders". That yields todo.reminders, which the dashboard's
+# to-do-list card and Hermes/voice "add to my list" flows write to.
+# (The Local To-do integration cannot be set up from YAML/packages.)

@@ -1,0 +1,172 @@
+# =============================================================================
+# ElderAssist AI — Lovelace dashboard (YAML mode)
+# -----------------------------------------------------------------------------
+# A wall-tablet fallback + caregiver view built from CORE cards only (no HACS),
+# so it works out of the box. Big buttons, big text.
+#
+# Install (YAML-mode dashboard): copy to <config>/dashboards/elder_dashboard.yaml
+# and register it in configuration.yaml:
+#
+#   lovelace:
+#     dashboards:
+#       elder-dashboard:
+#         mode: yaml
+#         title: ElderAssist
+#         icon: mdi:account-heart
+#         show_in_sidebar: true
+#         filename: dashboards/elder_dashboard.yaml
+#
+# Restart HA. The URL path becomes /elder-dashboard (used by cast.show_lovelace_view
+# as dashboard_path: elder-dashboard).
+#
+# EDIT MARKERS: search "# EDIT" and replace the placeholder entity_ids with your
+# own (media players, TV, weather, calendar, notify service).
+# =============================================================================
+title: ElderAssist
+views:
+  # ===========================================================================
+  # VIEW 1 — HOME  (the elder's wall tablet)
+  # ===========================================================================
+  - title: Home
+    path: home
+    icon: mdi:home-heart
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              # Hello 👋
+              Tap a big button, or just say **"Hey, ..."** out loud.
+
+          # --- The two biggest, most important buttons ------------------------
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Call for help
+                icon: mdi:phone-alert
+                icon_height: 96px
+                show_state: false
+                tap_action:
+                  action: perform-action
+                  perform_action: notify.family_signal   # EDIT: your caregiver notify service
+                  data:
+                    title: Help requested
+                    message: "Help was requested from the ElderAssist tablet."
+              - type: button
+                name: I'm OK
+                icon: mdi:hand-wave
+                icon_height: 96px
+                tap_action:
+                  action: perform-action
+                  perform_action: input_button.press
+                  target:
+                    entity_id: input_button.i_am_ok
+
+      # --- Medication status --------------------------------------------------
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              ## 💊 Medication
+          - type: tile
+            entity: input_boolean.medication_acknowledged
+            name: Taken today?
+            color: green
+            tap_action:
+              action: toggle
+          - type: tile
+            entity: input_boolean.medication_acknowledged_2
+            name: Second medication taken?
+            color: green
+            tap_action:
+              action: toggle
+
+      # --- Today's appointments ----------------------------------------------
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              ## 📅 Today
+          - type: calendar
+            initial_view: list
+            entities:
+              - calendar.family   # EDIT: your calendar entity
+
+      # --- TV controls --------------------------------------------------------
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              ## 📺 TV
+          - type: media-control
+            entity: media_player.living_room_tv   # EDIT: your TV media_player
+
+      # --- Reminders to-do list ----------------------------------------------
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              ## ⏰ Reminders
+          - type: todo-list
+            entity: todo.reminders   # created via the Local To-do integration
+
+      # --- Weather ------------------------------------------------------------
+      - type: grid
+        cards:
+          - type: weather-forecast
+            entity: weather.home   # EDIT: your weather entity
+            forecast_type: daily
+
+  # ===========================================================================
+  # VIEW 2 — CAREGIVER  (status at a glance)
+  # ===========================================================================
+  - title: Caregiver
+    path: caregiver
+    icon: mdi:account-supervisor
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              ## Status at a glance
+          - type: glance
+            title: Acknowledgment & wellness
+            columns: 2
+            entities:
+              - entity: input_boolean.medication_acknowledged
+                name: Med 1 taken
+              - entity: input_boolean.medication_acknowledged_2
+                name: Med 2 taken
+              - entity: input_button.i_am_ok
+                name: "I'm OK (last)"
+              - entity: counter.reminders_missed
+                name: Missed
+
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              ## "Where did I put..." notes
+          - type: entities
+            entities:
+              - entity: input_text.last_thing_put_away
+                name: Last item
+              - entity: input_text.last_thing_location
+                name: Location
+
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              ## Announce targets
+          - type: entities
+            title: Speakers / TVs
+            show_header_toggle: false
+            entities:
+              - media_player.living_room_speaker   # EDIT
+              - media_player.kitchen_speaker        # EDIT
+              - media_player.living_room_tv         # EDIT

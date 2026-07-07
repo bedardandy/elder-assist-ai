@@ -1,0 +1,248 @@
+# =============================================================================
+# ElderAssist AI — Medication reminder that escalates  (FLAGSHIP)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES
+#   At each configured dose time it:
+#     1. Announces the reminder out loud via tts.speak on your media players,
+#        and (optionally) sends an actionable push notification to a phone.
+#     2. Waits for acknowledgment — the elder saying "I took my medicine"
+#        (voice intent flips the input_boolean), tapping the dashboard tile,
+#        or tapping the notification button — for up to `grace_minutes`.
+#     3. If acknowledged in time: done, and it resets the acknowledgment flag.
+#     4. If NOT acknowledged in time: announces once more AND fires an
+#        escalation notification to a caregiver (e.g. notify.family_signal),
+#        then resets the flag so tomorrow starts clean.
+#
+# WHY THIS SHAPE
+#   * mode: parallel — several dose times a day can be mid-wait at once.
+#   * The input_boolean is the guaranteed acknowledgment path (voice + dashboard
+#     both target THIS medication's boolean). The push button is a convenience.
+#   * The LLM is never in this loop — this is deterministic Home Assistant, per
+#     the project rule "the LLM never owns a deadline".
+#
+# NOTE: 00:00 (midnight) is reserved as the "unused slot" sentinel for the
+# optional extra dose times, so you cannot schedule a dose at exactly 00:00.
+# =============================================================================
+blueprint:
+  name: ElderAssist — Medication reminder (escalating)
+  description: >-
+    Announce a medication reminder, require acknowledgment, and escalate to a
+    caregiver if it is not acknowledged within a grace period.
+  domain: automation
+  source_url: https://github.com/bedardandy/elder-assist-ai/blob/main/ha/blueprints/automation/elder_assist/medication_reminder.yaml
+  input:
+    medication:
+      name: Medication name
+      description: Spoken in the reminder, e.g. "your blood pressure pill".
+      selector:
+        text:
+
+    dose_time_1:
+      name: Dose time 1
+      description: First (required) time of day for this medication.
+      default: "08:00:00"
+      selector:
+        time:
+    dose_time_2:
+      name: Dose time 2 (optional)
+      description: Leave at 00:00:00 if unused.
+      default: "00:00:00"
+      selector:
+        time:
+    dose_time_3:
+      name: Dose time 3 (optional)
+      description: Leave at 00:00:00 if unused.
+      default: "00:00:00"
+      selector:
+        time:
+    dose_time_4:
+      name: Dose time 4 (optional)
+      description: Leave at 00:00:00 if unused.
+      default: "00:00:00"
+      selector:
+        time:
+
+    announce_targets:
+      name: Announce on (speakers / TV)
+      description: Media players to speak the reminder through.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
+
+    tts_engine:
+      name: Text-to-speech engine
+      description: >-
+        The tts.* entity used to speak (e.g. tts.piper). Required to announce
+        out loud; if you only want push notifications you may leave it blank.
+      default:
+      selector:
+        entity:
+          filter:
+            - domain: tts
+
+    ack_boolean:
+      name: Acknowledgment helper
+      description: >-
+        The input_boolean this medication uses. Turning it ON (by voice,
+        dashboard, or push) acknowledges the dose. Use a DIFFERENT boolean per
+        medication. See input_boolean.medication_acknowledged in the package.
+      selector:
+        entity:
+          filter:
+            - domain: input_boolean
+
+    notify_device:
+      name: Phone to notify (optional)
+      description: >-
+        A mobile_app device to send an actionable push to. Leave empty to skip
+        push and rely on the spoken announcement + dashboard/voice ack.
+      default:
+      selector:
+        device:
+          integration: mobile_app
+
+    grace_minutes:
+      name: Grace period (minutes)
+      description: How long to wait for acknowledgment before escalating.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          unit_of_measurement: minutes
+          mode: box
+
+    escalation_service:
+      name: Escalation notify service
+      description: >-
+        The notify service to alert a caregiver on timeout, e.g.
+        notify.family_signal or notify.mobile_app_daughter_phone.
+      default: notify.notify
+      selector:
+        text:
+
+    escalation_message:
+      name: Escalation message
+      description: Sent to the caregiver when a dose is not acknowledged in time.
+      default: >-
+        ElderAssist: a medication reminder was not acknowledged within the
+        grace period. Please check in.
+      selector:
+        text:
+          multiline: true
+
+# Several doses can be waiting at once.
+mode: parallel
+max: 10
+
+triggers:
+  - trigger: time
+    at:
+      - !input dose_time_1
+      - !input dose_time_2
+      - !input dose_time_3
+      - !input dose_time_4
+
+conditions:
+  # Ignore the 00:00 sentinel firings from unused optional dose slots.
+  - condition: template
+    value_template: "{{ not (trigger.now.hour == 0 and trigger.now.minute == 0) }}"
+
+variables:
+  medication: !input medication
+  announce_targets: !input announce_targets
+  tts_engine: !input tts_engine
+  ack_boolean: !input ack_boolean
+  notify_device: !input notify_device
+  escalation_service: !input escalation_service
+  escalation_message: !input escalation_message
+  # Static action id for the push "Taken" button (see README notes on scope).
+  ack_action: ELDER_MED_ACK
+
+actions:
+  # Start from a clean slate so a stale ON flag can't auto-acknowledge.
+  - action: input_boolean.turn_off
+    target:
+      entity_id: !input ack_boolean
+
+  # ---- 1. Announce out loud -------------------------------------------------
+  - if:
+      - condition: template
+        value_template: "{{ tts_engine not in [none, ''] }}"
+    then:
+      - action: tts.speak
+        target:
+          entity_id: !input tts_engine
+        data:
+          media_player_entity_id: "{{ announce_targets }}"
+          cache: false
+          message: "It's time to take {{ medication }}."
+
+  # ---- 1b. Actionable push (optional) --------------------------------------
+  - if:
+      - condition: template
+        value_template: "{{ notify_device not in [none, ''] }}"
+    then:
+      - device_id: !input notify_device
+        domain: mobile_app
+        type: notify
+        title: Medication reminder
+        message: "It's time to take {{ medication }}."
+        data:
+          tag: "elder_med_{{ medication | slugify }}"
+          actions:
+            - action: "{{ ack_action }}"
+              title: I took it
+
+  # ---- 2. Wait for acknowledgment, up to grace_minutes ---------------------
+  - wait_for_trigger:
+      - trigger: state
+        entity_id: !input ack_boolean
+        to: "on"
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: ELDER_MED_ACK
+    timeout:
+      minutes: !input grace_minutes
+    continue_on_timeout: true
+
+  # ---- 3/4. Escalate on timeout (wait.trigger is None when it times out) ----
+  - if:
+      - condition: template
+        value_template: "{{ wait.trigger is none }}"
+    then:
+      # Repeat the announcement once.
+      - if:
+          - condition: template
+            value_template: "{{ tts_engine not in [none, ''] }}"
+        then:
+          - action: tts.speak
+            target:
+              entity_id: !input tts_engine
+            data:
+              media_player_entity_id: "{{ announce_targets }}"
+              cache: false
+              message: >-
+                Reminder: please take {{ medication }}. A family member is
+                being notified.
+      # Escalate to the caregiver.
+      - action: "{{ escalation_service }}"
+        data:
+          message: "{{ escalation_message }}"
+      # Track the miss (helper from the ElderAssist package, if present).
+      - if:
+          - condition: template
+            value_template: "{{ states('counter.reminders_missed') not in ['unknown', 'unavailable'] }}"
+        then:
+          - action: counter.increment
+            target:
+              entity_id: counter.reminders_missed
+
+  # ---- Reset for the next dose ---------------------------------------------
+  - action: input_boolean.turn_off
+    target:
+      entity_id: !input ack_boolean

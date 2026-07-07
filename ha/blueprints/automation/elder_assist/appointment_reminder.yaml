@@ -1,0 +1,146 @@
+# =============================================================================
+# ElderAssist AI — Appointment reminders (evening-before + morning-of)
+# -----------------------------------------------------------------------------
+# WHAT IT DOES
+#   Twice a day it reads a calendar and announces what's coming up:
+#     * At the "evening before" time  -> announces TOMORROW's appointments.
+#     * At the "morning of" time       -> announces TODAY's appointments.
+#   It also optionally sends the same summary as a push notification.
+#
+# WHY A TIME TRIGGER + calendar.get_events (not per-event offset triggers)
+#   Family adds/edits appointments from anywhere via the agent. Polling the
+#   calendar at two fixed times and reading the whole day is far more robust
+#   than N per-event automations: nothing to re-arm when an event moves, and a
+#   short hub outage can't cause a single event's offset trigger to be missed.
+# =============================================================================
+blueprint:
+  name: ElderAssist — Appointment reminders
+  description: >-
+    Announce tomorrow's appointments the evening before and today's the morning
+    of, from a calendar entity, using tts.speak (+ optional push).
+  domain: automation
+  source_url: https://github.com/bedardandy/elder-assist-ai/blob/main/ha/blueprints/automation/elder_assist/appointment_reminder.yaml
+  input:
+    calendar_entity:
+      name: Calendar
+      description: The calendar to read appointments from.
+      selector:
+        entity:
+          filter:
+            - domain: calendar
+
+    announce_targets:
+      name: Announce on (speakers / TV)
+      description: Media players to speak the summary through.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
+
+    tts_engine:
+      name: Text-to-speech engine
+      description: The tts.* entity used to speak (e.g. tts.piper).
+      selector:
+        entity:
+          filter:
+            - domain: tts
+
+    evening_time:
+      name: Evening-before time
+      description: When to announce tomorrow's appointments.
+      default: "18:00:00"
+      selector:
+        time:
+
+    morning_time:
+      name: Morning-of time
+      description: When to announce today's appointments.
+      default: "08:00:00"
+      selector:
+        time:
+
+    notify_service:
+      name: Notify service (optional)
+      description: >-
+        Optional notify service to also send the summary as text, e.g.
+        notify.mobile_app_moms_phone. Leave blank to only speak it.
+      default:
+      selector:
+        text:
+
+mode: parallel
+max: 4
+
+triggers:
+  - trigger: time
+    at: !input evening_time
+    id: evening
+  - trigger: time
+    at: !input morning_time
+    id: morning
+
+variables:
+  calendar_entity: !input calendar_entity
+  announce_targets: !input announce_targets
+  notify_service: !input notify_service
+  # "evening" trigger looks at tomorrow; "morning" trigger looks at today.
+  is_evening: "{{ trigger.id == 'evening' }}"
+  when_word: "{{ 'tomorrow' if is_evening else 'today' }}"
+
+actions:
+  # Pull the events for the target day into the `agenda` response variable.
+  - action: calendar.get_events
+    target:
+      entity_id: !input calendar_entity
+    data:
+      start_date_time: >-
+        {{ (today_at('00:00') + timedelta(days=1 if is_evening else 0))
+           .strftime('%Y-%m-%d %H:%M:%S') }}
+      end_date_time: >-
+        {{ (today_at('00:00') + timedelta(days=2 if is_evening else 1))
+           .strftime('%Y-%m-%d %H:%M:%S') }}
+    response_variable: agenda
+
+  - variables:
+      # response is keyed by the calendar entity id -> { events: [...] }.
+      events: "{{ agenda[calendar_entity].events | default([]) }}"
+      # Build a spoken summary. Times shown as e.g. "2:30 PM"; all-day events
+      # (start has no "T"/time component) are read without a time.
+      summary: >-
+        {% set parts = [] %}
+        {% for e in events %}
+          {% set raw = e.start %}
+          {% if 'T' in raw or ' ' in raw %}
+            {% set t = as_datetime(raw) | as_local %}
+            {% set parts = parts + [t.strftime('%-I:%M %p') ~ ', ' ~ e.summary] %}
+          {% else %}
+            {% set parts = parts + ['all day, ' ~ e.summary] %}
+          {% endif %}
+        {% endfor %}
+        {{ parts | join('. ') }}
+      spoken: >-
+        {% if events | count == 0 %}
+          You have no appointments {{ when_word }}.
+        {% elif events | count == 1 %}
+          You have one appointment {{ when_word }}: {{ summary }}.
+        {% else %}
+          You have {{ events | count }} appointments {{ when_word }}: {{ summary }}.
+        {% endif %}
+
+  - action: tts.speak
+    target:
+      entity_id: !input tts_engine
+    data:
+      media_player_entity_id: "{{ announce_targets }}"
+      cache: false
+      message: "{{ spoken }}"
+
+  - if:
+      - condition: template
+        value_template: "{{ notify_service not in [none, ''] }}"
+    then:
+      - action: "{{ notify_service }}"
+        data:
+          title: "Appointments {{ when_word }}"
+          message: "{{ spoken }}"

@@ -1,0 +1,135 @@
+# =============================================================================
+# ElderAssist AI — Stove-on nudge
+# -----------------------------------------------------------------------------
+# WHAT IT DOES
+#   Watches a sensor that reports the stove/appliance is "on" — typically a
+#   smart plug's power/binary state, or a contact/heat sensor. If it stays on
+#   for longer than N minutes, it speaks a gentle nudge ("the stove has been on
+#   for 20 minutes") and optionally notifies a caregiver. This is a
+#   forgetfulness aid, not a safety cut-off — it never turns anything off.
+#
+#   Works with either:
+#     * a binary_sensor that is "on" while the appliance runs (smart-plug
+#       state helper, contact sensor, heat sensor), or
+#     * you can point it at a smart plug's own binary "outlet" sensor.
+# =============================================================================
+blueprint:
+  name: ElderAssist — Stove / appliance on-too-long nudge
+  description: >-
+    Speak a nudge (and optionally notify) when an appliance sensor stays on
+    longer than a threshold. A reminder aid, not a safety shutoff.
+  domain: automation
+  source_url: https://github.com/bedardandy/elder-assist-ai/blob/main/ha/blueprints/automation/elder_assist/stove_timer_nudge.yaml
+  input:
+    appliance_sensor:
+      name: Appliance sensor
+      description: A binary_sensor that is "on" while the appliance is running.
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+
+    on_minutes:
+      name: Minutes on before nudging
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          unit_of_measurement: minutes
+          mode: box
+
+    appliance_name:
+      name: Spoken name of the appliance
+      description: e.g. "the stove", "the oven", "the iron".
+      default: the stove
+      selector:
+        text:
+
+    announce_targets:
+      name: Announce on (speakers / TV)
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
+
+    tts_engine:
+      name: Text-to-speech engine
+      selector:
+        entity:
+          filter:
+            - domain: tts
+
+    notify_service:
+      name: Notify service (optional)
+      description: e.g. notify.family_signal. Leave blank to only speak it.
+      default:
+      selector:
+        text:
+
+    repeat:
+      name: Repeat the nudge
+      description: >-
+        If on, re-nudge every "minutes on" interval until the appliance is
+        turned off.
+      default: true
+      selector:
+        boolean:
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input appliance_sensor
+    to: "on"
+    for:
+      minutes: !input on_minutes
+
+variables:
+  appliance_name: !input appliance_name
+  announce_targets: !input announce_targets
+  on_minutes: !input on_minutes
+  notify_service: !input notify_service
+  appliance_sensor: !input appliance_sensor
+  repeat: !input repeat
+
+actions:
+  - repeat:
+      # Nudge at least once; keep nudging every interval while still on if the
+      # user enabled repeat.
+      while:
+        - condition: state
+          entity_id: !input appliance_sensor
+          state: "on"
+      sequence:
+        - action: tts.speak
+          target:
+            entity_id: !input tts_engine
+          data:
+            media_player_entity_id: "{{ announce_targets }}"
+            cache: false
+            message: >-
+              {{ appliance_name | capitalize }} has been on for about
+              {{ on_minutes * repeat.index }} minutes.
+        - if:
+            - condition: template
+              value_template: "{{ notify_service not in [none, ''] }}"
+          then:
+            - action: "{{ notify_service }}"
+              data:
+                title: Appliance still on
+                message: >-
+                  {{ appliance_name | capitalize }} has been on for about
+                  {{ on_minutes * repeat.index }} minutes.
+        # Stop after the first nudge unless repeat is enabled.
+        - if:
+            - condition: template
+              value_template: "{{ not repeat }}"
+          then:
+            - stop: Single nudge only
+        # Wait one more interval, then the while-condition re-checks.
+        - delay:
+            minutes: !input on_minutes

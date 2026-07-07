@@ -1,0 +1,117 @@
+# =============================================================================
+# ElderAssist AI — Morning wellness check ("no motion by 10am")
+# -----------------------------------------------------------------------------
+# WHAT IT DOES
+#   At a deadline time (default 10:00) it checks whether ANY of the listed
+#   motion / door sensors changed state since a start time (default 05:00).
+#   If nothing moved all morning, it notifies a caregiver.
+#
+#   Optionally, the elder can pre-empt the whole thing by pressing "I'm OK"
+#   (input_button.i_am_ok) — if that button was pressed after the start time,
+#   the check passes and no one is bothered.
+#
+# WHY last_changed COMPARISON (not a state-for-duration trigger)
+#   We only care at the single deadline moment: "has there been ANY sign of
+#   life this morning?" Evaluating last_changed of each sensor at the deadline
+#   is simple and can't be fooled by a sensor that flapped once at 5am.
+# =============================================================================
+blueprint:
+  name: ElderAssist — Morning wellness check
+  description: >-
+    If none of the chosen motion/door sensors changed between a start time and
+    a deadline (and the elder didn't press "I'm OK"), notify a caregiver.
+  domain: automation
+  source_url: https://github.com/bedardandy/elder-assist-ai/blob/main/ha/blueprints/automation/elder_assist/wellness_check.yaml
+  input:
+    sensors:
+      name: Motion / door sensors
+      description: Any activity on these counts as a sign of life.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: binary_sensor
+
+    ok_button:
+      name: "\"I'm OK\" button (optional)"
+      description: >-
+        If the elder pressed this input_button after the start time, the check
+        passes. Defaults to the package's input_button.i_am_ok — clear it if
+        you don't use one.
+      default: input_button.i_am_ok
+      selector:
+        entity:
+          filter:
+            - domain: input_button
+
+    start_time:
+      name: Start time
+      description: Beginning of the morning window to watch.
+      default: "05:00:00"
+      selector:
+        time:
+
+    deadline_time:
+      name: Deadline time
+      description: If nothing moved by now, notify the caregiver.
+      default: "10:00:00"
+      selector:
+        time:
+
+    caregiver_service:
+      name: Caregiver notify service
+      description: e.g. notify.family_signal or notify.mobile_app_daughter_phone.
+      default: notify.notify
+      selector:
+        text:
+
+    message:
+      name: Alert message
+      description: Sent to the caregiver when the check fails.
+      default: >-
+        ElderAssist wellness check: no movement detected this morning and the
+        "I'm OK" button was not pressed. Please check in.
+      selector:
+        text:
+          multiline: true
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: time
+    at: !input deadline_time
+
+variables:
+  sensors: !input sensors
+  ok_button: !input ok_button
+  start_time: !input start_time
+  # A sign of life = any listed sensor changed after start_time today, OR the
+  # "I'm OK" button was pressed after start_time today.
+  window_start: "{{ today_at(start_time) }}"
+  sensor_activity: >-
+    {{ expand(sensors)
+       | selectattr('last_changed', 'ge', window_start)
+       | list | count > 0 }}
+  button_pressed: >-
+    {{ ok_button not in [none, ''] and
+       states(ok_button) not in ['unknown', 'unavailable'] and
+       as_datetime(states(ok_button)) | as_local >= window_start }}
+  all_quiet: "{{ not sensor_activity and not button_pressed }}"
+
+conditions:
+  - condition: template
+    value_template: "{{ all_quiet }}"
+
+actions:
+  - action: "{{ caregiver_service }}"
+    data:
+      title: Wellness check
+      message: !input message
+  - if:
+      - condition: template
+        value_template: "{{ states('counter.reminders_missed') not in ['unknown', 'unavailable'] }}"
+    then:
+      - action: counter.increment
+        target:
+          entity_id: counter.reminders_missed

@@ -1,0 +1,101 @@
+# =============================================================================
+# ElderAssist AI — Door left open
+# -----------------------------------------------------------------------------
+# WHAT IT DOES
+#   If a door's binary_sensor stays "open" for longer than a threshold, it
+#   announces a spoken nudge and (optionally) notifies a caregiver. When the
+#   door is finally closed it can announce an "all clear".
+# =============================================================================
+blueprint:
+  name: ElderAssist — Door left open
+  description: >-
+    Announce (and optionally notify) when a door stays open past a threshold.
+  domain: automation
+  source_url: https://github.com/bedardandy/elder-assist-ai/blob/main/ha/blueprints/automation/elder_assist/door_left_open.yaml
+  input:
+    door_sensor:
+      name: Door sensor
+      description: A binary_sensor that is "on" when the door is open.
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+              device_class: door
+            - domain: binary_sensor
+              device_class: opening
+            - domain: binary_sensor
+              device_class: garage_door
+
+    open_minutes:
+      name: Minutes open before alerting
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 120
+          step: 1
+          unit_of_measurement: minutes
+          mode: box
+
+    door_name:
+      name: Spoken name of the door
+      description: Used in the announcement, e.g. "the front door".
+      default: the door
+      selector:
+        text:
+
+    announce_targets:
+      name: Announce on (speakers / TV)
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
+
+    tts_engine:
+      name: Text-to-speech engine
+      selector:
+        entity:
+          filter:
+            - domain: tts
+
+    notify_service:
+      name: Notify service (optional)
+      description: e.g. notify.family_signal. Leave blank to only speak it.
+      default:
+      selector:
+        text:
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input door_sensor
+    to: "on"
+    for:
+      minutes: !input open_minutes
+
+variables:
+  door_name: !input door_name
+  announce_targets: !input announce_targets
+  open_minutes: !input open_minutes
+  notify_service: !input notify_service
+
+actions:
+  - action: tts.speak
+    target:
+      entity_id: !input tts_engine
+    data:
+      media_player_entity_id: "{{ announce_targets }}"
+      cache: false
+      message: "{{ door_name | capitalize }} has been open for {{ open_minutes }} minutes."
+
+  - if:
+      - condition: template
+        value_template: "{{ notify_service not in [none, ''] }}"
+    then:
+      - action: "{{ notify_service }}"
+        data:
+          title: Door left open
+          message: "{{ door_name | capitalize }} has been open for {{ open_minutes }} minutes."
