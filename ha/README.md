@@ -70,6 +70,23 @@ homeassistant:
   packages: !include_dir_named packages
 ```
 
+**While you're editing `configuration.yaml`, add the kiosk CORS block.** The PWA is
+served from a different origin (`http://<hub-ip>:8880`), so HA must be told to accept
+its cross-origin API calls. This **must** live in the top-level `configuration.yaml` —
+**not** in this package (packages cannot merge the `http:` key):
+
+```yaml
+http:
+  cors_allowed_origins:
+    - http://<hub-ip>:8880          # e.g. http://192.168.1.10:8880
+    - http://homeassistant.local:8880
+    # add your Tailscale hostname here too if you use it
+```
+
+Without it, **every** PWA API call fails with a CORS error and the elder sees the
+friendly "can't reach the house computer" banner. (Do not add `use_x_forwarded_for` /
+`trusted_proxies` unless HA actually sits behind a reverse proxy — see `pwa/README.md`.)
+
 **Before restarting, edit `elder_assist.yaml`** — search for `# EDIT` and set:
 - `group.elder_announce_targets` → your real `media_player.*` speakers.
 - `tts.piper` in `script.elder_announce` → your TTS engine entity (see step 3).
@@ -172,7 +189,8 @@ lovelace:
 ```
 
 Edit the `# EDIT` entity_ids in the dashboard (media players, TV, weather,
-calendar, `notify.family_signal`), then restart HA. The dashboard URL path is
+calendar, and the `notify.notify` placeholder → your caregiver notify service),
+then restart HA. The dashboard URL path is
 `/elder-dashboard` — the same `dashboard_path: elder-dashboard` used by
 `script.elder_cast_instruction` / `cast.show_lovelace_view`.
 
@@ -180,8 +198,11 @@ calendar, `notify.family_signal`), then restart HA. The dashboard URL path is
 
 ## 6. Create the elder user + long-lived token
 
-The elder's surfaces run as a **non-admin, capability-scoped** user (see
-`../docs/ARCHITECTURE.md` trust model), not the admin account.
+The elder's surfaces run as a **non-admin** user (see `../docs/ARCHITECTURE.md`
+trust model), not the admin account. NOTE: HA tokens are **not** entity-scoped —
+non-admin only prevents config/user changes; the token can still call any service on
+any entity via the REST API. Keep dangerous actuators (locks, garage doors, alarm
+panels) off this HA instance (or on a separate instance this token can't reach).
 
 1. Settings → People → **Add user** → name "Elder", **Administrator: OFF**.
 2. Log in *as that user* → click the user profile (bottom-left) → Security →
@@ -207,11 +228,20 @@ traces.
 | "I'm okay" | Confirms; `input_button.i_am_ok` press event fires. |
 | Med automation dose time (set one 2 min out to test) | Speakers announce "It's time to take …". If a phone is configured, an actionable push arrives. |
 | …then **do nothing** for the grace period | Announces once more and the escalation `notify.*` fires; `counter.reminders_missed` +1. |
-| …then **say "I took my pills"** within grace | No escalation; boolean resets to off afterward. |
+| …then **say "I took my pills"** within grace | No escalation; the boolean **stays ON** so "taken today" persists on the PWA/dashboard. It is reset at the start of the next dose's run, not right after the ack. |
 | Open a configured door and leave it | After the threshold, "The front door has been open for N minutes." |
 | Appointment automation morning/evening time | Speaks today's / tomorrow's appointments from the calendar (or "no appointments"). |
 | Tablet: tap **Call for help** | Caregiver `notify.*` receives "Help requested". |
 | Tablet: tap **I'm OK** | `input_button.i_am_ok` press fires (satisfies the wellness check). |
+
+### Two-medication voice acks
+The **generic** phrase — "I took my medicine/pills" (and "I took my *morning*
+pills") — acknowledges **medication 1** (`input_boolean.medication_acknowledged`).
+For a two-medication regimen, say "I took my **evening**/night pills" (or "I took my
+**second** medicine") to acknowledge **medication 2**
+(`input_boolean.medication_acknowledged_2`), or just use the tablet tile for the
+right medication. There is no way to tell two people apart by voice — see the
+single-elder note in `docs/playbooks/onboarding.md`.
 
 ### Notes on the acknowledgment paths
 The medication blueprint's **guaranteed** acknowledgment is the `input_boolean`,

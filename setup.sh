@@ -124,7 +124,15 @@ elif command -v readlink >/dev/null 2>&1 && [ -L /etc/localtime ]; then
   DETECTED_TZ="$(readlink /etc/localtime | sed -E 's#.*/zoneinfo/##' || true)"
 fi
 CURRENT_TZ="$(grep -E '^TZ=' "${ENV_FILE}" | tail -n1 | cut -d= -f2- || true)"
-DEFAULT_TZ="${DETECTED_TZ:-${CURRENT_TZ:-America/New_York}}"
+# An existing, user-chosen TZ in .env wins (idempotent re-runs shouldn't clobber it),
+# matching setup.ps1. "America/New_York" is the .env.example placeholder, so a value
+# equal to it counts as "not yet chosen" and we fall back to detection (first run).
+PLACEHOLDER_TZ="America/New_York"
+if [ -n "${CURRENT_TZ}" ] && [ "${CURRENT_TZ}" != "${PLACEHOLDER_TZ}" ]; then
+  DEFAULT_TZ="${CURRENT_TZ}"
+else
+  DEFAULT_TZ="${DETECTED_TZ:-${CURRENT_TZ:-${PLACEHOLDER_TZ}}}"
+fi
 
 if [ -t 0 ]; then
   printf 'Timezone for reminders/logs [%s]: ' "${DEFAULT_TZ}"

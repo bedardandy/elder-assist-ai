@@ -58,6 +58,26 @@
   .btn .icon { font-size: calc(3.2rem * var(--scale)); }
 }
 
+/* ---- A+ (xl) HOME layout: keep 6 cards + header on one screen, no scroll ----
+   At the largest text size the ROOT font-size is enlarged, which inflates every
+   rem-based size. On short kiosk screens (e.g. 1024x768) that balloons the header
+   and the three button rows so the bottom row overflows and clips. Cap the header
+   and clamp the button icon/label to the VIEWPORT HEIGHT — deliberately in px/vh
+   (NOT rem, which would re-inflate) — so header + 6 cards always fit without a
+   scroll, staying large on tall screens (e.g. 800x1280). */
+html[data-textsize="xl"] .app-header { padding: 10px 16px; gap: 12px; }
+html[data-textsize="xl"] .greet .hello { font-size: clamp(26px, 4.4vh, 46px); }
+html[data-textsize="xl"] .greet .date  { font-size: clamp(15px, 2.3vh, 26px); }
+html[data-textsize="xl"] .clock         { font-size: clamp(30px, 5.2vh, 52px); }
+html[data-textsize="xl"] .txt-toggle button { min-width: 52px; min-height: 52px; }
+html[data-textsize="xl"] .txt-toggle button.small { font-size: 22px; }
+html[data-textsize="xl"] .txt-toggle button.big   { font-size: 30px; }
+
+html[data-textsize="xl"] .home-grid { padding: clamp(10px, 2.2vh, 26px); gap: clamp(10px, 2.2vh, 28px); }
+html[data-textsize="xl"] .home-grid .btn { min-height: 0; padding: clamp(6px, 1.6vh, 20px); gap: clamp(2px, 0.7vh, 8px); }
+html[data-textsize="xl"] .home-grid .btn .icon  { font-size: clamp(40px, 9vh, 100px); }
+html[data-textsize="xl"] .home-grid .btn .label { font-size: clamp(22px, 3.4vh, 42px); line-height: 1.1; }
+
 /* ---- SUBPAGE chrome ---------------------------------------------------- */
 .page-head {
   flex: 0 0 auto;

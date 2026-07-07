@@ -167,7 +167,11 @@ Now create the elder's restricted user and the token the kiosk PWA uses.
    Settings → People → **Users** → **Add User**.
    - Name it (e.g. the elder's first name).
    - **Leave "Administrator" OFF.** The elder is the user, not the admin
-     (see principle 3 in the README) — this account is capability-scoped.
+     (see principle 3 in the README). NOTE: HA tokens are **not** entity-scoped —
+     non-admin only prevents config/user changes; it does **not** stop the token
+     from calling any service on any entity via the REST API. The real safeguard is
+     keeping dangerous actuators (locks, garage doors, alarm panels) off this HA
+     instance (or on a separate instance this token can't reach).
    - Set a simple username/password; the kiosk stays logged in, so the elder
      rarely types it.
 5. **Create a long-lived access token for the PWA.**
@@ -175,12 +179,14 @@ Now create the elder's restricted user and the token the kiosk PWA uses.
      page** → scroll to **Long-Lived Access Tokens** → **Create Token**.
    - Name it `kiosk-pwa`. **Copy the token now** — HA shows it only once.
    - This token is what the six-button kiosk app uses to talk to HA's REST /
-     WebSocket (Assist) API on the elder's behalf, scoped to the elder user's
-     permissions. Keep it out of git (it lives in the PWA's local config, not
-     this repo).
+     WebSocket (Assist) API on the elder's behalf. Keep it out of git (it lives in
+     the PWA's local config, not this repo).
 
 > Creating the token under the **non-admin elder user** is deliberate: if the
-> kiosk tablet is lost, the token cannot administer the hub.
+> kiosk tablet is lost, the token cannot administer the hub — it cannot change
+> configuration or users. It **can**, however, call any service on any entity (HA
+> has no per-entity token scoping), so keep locks/garage/alarm actuators off this
+> instance and treat the tablet like a house key.
 
 ---
 
@@ -282,7 +288,9 @@ caregiver account there too:
   first account is made from its setup screen).
 - Grocy → `http://HUB_IP:9283` (default login `admin` / `admin` — change it
   immediately).
-- Open WebUI → `http://HUB_IP:3000` (first account you create becomes admin).
+- Open WebUI → `http://HUB_IP:3000` — **create the admin account immediately after
+  first start.** The **first** account registered becomes the admin, so register it
+  yourself right away before anyone else can reach the page and claim it.
 
 ---
 
@@ -397,6 +405,20 @@ volume's archive in turn. Keep a copy of `./backups` off the hub (another
 drive, a NAS, or encrypted cloud) — a backup on the same failing disk is not a
 backup.
 
+> **These archives hold secrets in cleartext.** The `ha_config` volume contains
+> Home Assistant's `secrets.yaml` and the auth tokens in `.storage`. Store the
+> archives on **encrypted media**, or encrypt each one, e.g.:
+> ```bash
+> gpg -c backups/elderassist_ha_config-20260707-120000.tar.gz   # -> .gpg, passphrase-protected
+> ```
+> Treat the backups like the tokens themselves.
+
+> **Hermes memory is NOT in a Docker volume.** The household memory book and agent
+> config live in `~/.hermes/` (Linux/macOS) or `%LOCALAPPDATA%\hermes\` (Windows) —
+> outside the compose volumes this script archives. Back that directory up
+> **separately** (it holds `memories/`, `config.yaml`, and `.env` secrets — encrypt
+> it too).
+
 ---
 
 ## Service reference (ports & hostnames)
@@ -417,6 +439,12 @@ Everything below is defined in `.env` (ports) and `docker/docker-compose.yml`
 | Open WebUI | webui | `:3000` | `open-webui` | `openwebui_data` |
 
 Volumes are prefixed with the project name, e.g. `elderassist_ha_config`.
+
+> **Loopback binding (Ollama & Open WebUI).** Ollama's API is **unauthenticated**,
+> so the compose file binds it — and Open WebUI — to `127.0.0.1` by default; they
+> are reachable from the hub itself but **not** from the rest of the LAN. If another
+> host needs Ollama (e.g. Hermes on a different machine), set `OLLAMA_BIND=0.0.0.0`
+> (and/or `WEBUI_BIND=0.0.0.0`) in `.env` and bring the stack up again.
 
 ---
 

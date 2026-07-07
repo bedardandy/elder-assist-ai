@@ -70,6 +70,19 @@ metoprolol are two automations). For each:
 - [ ] **Grace period + escalation target**: see §4 — tune by risk, don't accept the
       default blindly.
 
+### Hearing-loss tuning
+If the announcement isn't reliably heard, tune it — quietly missed reminders are just
+missed reminders:
+
+- **Announce volume.** The `medication_reminder` blueprint has an optional
+  **Announce volume (0–100)** input: it sets the speakers to that level before
+  speaking and, on the timeout repeat, raises it by 10 ("louder on repeat"). Leave it
+  at 0 to keep the current volume. The shared `script.elder_announce` takes the same
+  optional `volume`.
+- **Voice & speed.** Piper (`PIPER_VOICE` in `.env`) offers clearer/slower voices;
+  browse <https://rhasspy.github.io/piper-samples/>. A slower, lower-pitched voice is
+  easier for many older ears than the default rate.
+
 ---
 
 ## 3. The acknowledgment ritual

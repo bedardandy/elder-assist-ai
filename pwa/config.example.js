@@ -44,7 +44,9 @@ export default {
     // with a SIM or FaceTime. Leave empty ('') to hide the phone option.
     phone: '+15551234567',
     // Optional Jitsi room for a video call to the caregiver.
-    jitsiRoom: 'ElderAssist-Susan-Care',
+    // SECURITY: rooms on public meet.jit.si are open to ANYONE who knows the name.
+    // ALWAYS append a long random suffix (see the calling-and-video playbook).
+    jitsiRoom: 'ElderAssist-Susan-Care-q7Kp2mZx9R',
     // 'video' opens Jitsi, 'phone' uses the tel: link as the primary action.
     type: 'phone',
   },
@@ -52,17 +54,22 @@ export default {
   /* ---- Video calling ---------------------------------------------------- */
   // Base URL of the Jitsi instance. Public default shown; a family-run
   // instance also works. Rooms are per-person and stable — no account needed.
+  // On public meet.jit.si a room is open to anyone who knows its name, so every
+  // jitsiRoom below MUST carry a long random suffix (never a bare name like
+  // 'ElderAssist-Susan'). See docs/playbooks/calling-and-video.md.
   jitsiBase: 'https://meet.jit.si',
 
   /* ---- Call Family: one card per person --------------------------------- */
   // type: 'video'  -> opens `jitsiRoom` (or a full `url`) with prejoin skipped.
   // type: 'phone'  -> dials `phone` (tel:).
+  // Each jitsiRoom carries a long RANDOM suffix — public rooms are open to anyone
+  // who knows the name, so never use a bare 'ElderAssist-<person>' room.
   contacts: [
-    { name: 'Susan',   type: 'video', jitsiRoom: 'ElderAssist-Susan',  phone: '+15551234567' },
-    { name: 'David',   type: 'video', jitsiRoom: 'ElderAssist-David',  phone: '+15559876543' },
+    { name: 'Susan',   type: 'video', jitsiRoom: 'ElderAssist-Susan-x7Kq9mPzW4', phone: '+15551234567' },
+    { name: 'David',   type: 'video', jitsiRoom: 'ElderAssist-David-3nH8dV6bLp', phone: '+15559876543' },
     { name: 'Emily',   type: 'phone', phone: '+15552223333' },
-    // A full external URL is also allowed instead of a jitsiRoom:
-    // { name: 'Dr. Lee', type: 'video', url: 'https://meet.jit.si/DrLee-Mary' },
+    // A full external URL is also allowed instead of a jitsiRoom (keep the random suffix):
+    // { name: 'Dr. Lee', type: 'video', url: 'https://meet.jit.si/DrLee-Mary-Jf5tR2kQ8w' },
   ],
 
   /* ---- My Medicine ------------------------------------------------------ */

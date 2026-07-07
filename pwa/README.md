@@ -7,9 +7,12 @@ non-admin** user's long-lived token.
 
 ```
 📞 Call Family   💊 My Medicine
-📅 Today         🙋 Ask for Help
-📺 TV            🔍 My Things
+📅 Today         🙋 Get Help
+📺 TV            🔍 Find My Things
 ```
+
+(The **Get Help** button opens the Help page — call the caregiver, "Something is
+wrong," and a calm **Ask a Question 🗣️** tile that reaches the AI chat.)
 
 Plus a persistent large-print header: greeting by name, today's day/date (a real
 dementia aid), and a giant clock. An A / A+ text-size toggle is remembered between
@@ -32,10 +35,17 @@ read `config.js`.
    (bottom-left avatar) → scroll to **Long-lived access tokens → Create token**.
 3. Copy the token — you only see it once.
 
-Scope what the kiosk user can touch with HA's entity/area permissions or a
-[restricted user + `exposed_entities`](https://www.home-assistant.io/) setup so the
-token can only read/toggle the medication boolean, calendars, scripts, and
-media_players this app uses. See `ha/` for the companion package.
+**Be honest about what "non-admin" buys you.** Home Assistant has **no
+per-entity or per-token authorization**: a non-admin user's long-lived token can
+still call any service on any entity through the REST API. Making the user
+non-admin only stops it from changing configuration, adding users, or reaching
+admin settings — `exposed_entities` limits the Assist/voice layer, **not** the REST
+API this app uses. So the real mitigation is at the device level: keep dangerous
+actuators (door **locks**, **garage doors**, **alarm panels**) **off this Home
+Assistant instance** — or behind a separate instance/account this token cannot
+reach. And treat physical access as total control: anyone holding the tablet can
+do anything the token can, so **treat the kiosk tablet like a house key**. See
+`ha/` for the companion package.
 
 ### b. Fill in the config
 
@@ -62,13 +72,18 @@ http:
     - http://homeassistant.local:8880
     # add your Tailscale hostname/URL here too if you use it
     # - https://elderassist.<tailnet>.ts.net
-  use_x_forwarded_for: true
-  # trusted_proxies: only if HA sits behind a reverse proxy
 ```
 
-Restart Home Assistant after editing. (This snippet is also shipped with the `ha/`
-workstream's package so the two stay in sync.) Without it, the browser silently
-blocks the API calls and the elder sees "Can't reach the house computer."
+> **Do not add `use_x_forwarded_for` / `trusted_proxies` here.** Those belong *only*
+> when HA sits behind a real reverse proxy, and must be paired with a **tight
+> `trusted_proxies:`** list (the proxy's IP only) — enabling `use_x_forwarded_for`
+> without that lets clients spoof their IP. The kiosk talks to HA directly, so leave
+> them out.
+
+Restart Home Assistant after editing. This block goes in your **top-level
+`configuration.yaml`** (it cannot live in a package — see `ha/README.md`). Without it,
+the browser silently blocks the API calls and the elder sees "Can't reach the house
+computer."
 
 ### d. Serve it
 
@@ -127,7 +142,8 @@ of that.
 | **Call Family** | Opens a per-person **Jitsi** room (prejoin screen skipped) in a new fullscreen tab, or dials a `tel:` number. An **Emergency / Caregiver** card is pinned first and styled red. A "Calling …" full-screen state with a giant **Cancel** appears before the call opens. |
 | **My Medicine** | Shows the schedule from config, reads the real state of `input_boolean.medication_acknowledged`, and the **I TOOK IT ✓** button calls `input_boolean.turn_on`, then re-reads state so it reflects reality. |
 | **Today** | Today's & tomorrow's events from `GET /api/calendars/<entity>`, plus reminders from a to-do list via the `todo.get_items` response service. If reminders are unavailable it falls back to the calendar and says so. |
-| **Ask for Help** | Voice-first question box to HA Assist (`POST /api/conversation/process`). Uses the browser's Web Speech API mic when available, always offers typed input, shows big chat bubbles, and speaks the reply. See §5 on the mic. |
+| **Get Help** | The Help page: **emergency actions first** — a big **Call {caregiver}** button and **🆘 Something is wrong** (fires an HA alarm script) — then reassurance, then a calm **Ask a Question 🗣️** tile. |
+| **Ask a Question** (reached from Get Help) | Voice-first question box to HA Assist (`POST /api/conversation/process`). Uses the browser's Web Speech API mic when available, always offers typed input, shows big chat bubbles, and speaks the reply. See §5 on the mic. |
 | **TV** | Up to six big buttons that call HA services (`script.*`, `media_player.*`, …) from `config.tv.buttons`. |
 | **My Things** | Searches **HomeBox** (`GET /api/v1/items?q=`) if `baseUrl`+`token` are set, showing name/location/serial; otherwise a big tile deep-links to the HomeBox web app. |
 
@@ -141,8 +157,10 @@ of that.
 ## 5. Security & the microphone (read this)
 
 - **The token in `config.js` is readable by anyone with the device.** That is exactly
-  why it must belong to a **restricted, non-admin** HA user. Treat the tablet as a
-  shared appliance, not a personal login.
+  why it must belong to a **non-admin** HA user. NOTE: HA tokens are **not**
+  entity-scoped — non-admin only blocks config/user changes, it does not stop the
+  token from calling any service on any entity. Keep locks/garage/alarm actuators off
+  this HA instance (see §1a). Treat the tablet as a house key, not a personal login.
 - **Serve LAN-only by default.** For remote family access, put the hub on
   **[Tailscale](https://tailscale.com/)** rather than opening ports. Tailscale also
   gives you an HTTPS hostname (`*.ts.net`), which matters for the mic below.

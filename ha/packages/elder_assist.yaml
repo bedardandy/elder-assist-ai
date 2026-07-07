@@ -98,6 +98,16 @@ script:
             multiple: true
             filter:
               - domain: media_player
+      volume:
+        description: >-
+          Optional. Set the target speakers to this volume (0–100) before speaking —
+          helpful for hearing loss. Omit or 0 leaves the current volume unchanged.
+        selector:
+          number:
+            min: 0
+            max: 100
+            step: 5
+            mode: slider
     sequence:
       - variables:
           # Use explicit targets if provided, else expand the default group.
@@ -108,6 +118,16 @@ script:
               {{ expand('group.elder_announce_targets')
                  | map(attribute='entity_id') | list }}
             {% endif %}
+      # Optional hearing-loss volume: only when a volume > 0 was passed.
+      - if:
+          - condition: template
+            value_template: "{{ volume is defined and (volume | int(0)) > 0 }}"
+        then:
+          - action: media_player.volume_set
+            target:
+              entity_id: "{{ tts_targets }}"
+            data:
+              volume_level: "{{ (volume | int) / 100 }}"
       - action: tts.speak
         target:
           entity_id: tts.piper   # EDIT: your TTS engine entity (e.g. tts.piper)
@@ -231,7 +251,8 @@ intent_script:
     speech:
       text: "Okay, I'll remind you to {{ message }} in {{ minutes }} minutes."
 
-  # "I took my medicine | pills | medication | meds"
+  # "I took my medicine | pills | medication | meds" — the generic phrase (and
+  # "morning ...") acknowledges medication 1.
   ElderMedicationTaken:
     action:
       - action: input_boolean.turn_on
@@ -239,6 +260,15 @@ intent_script:
           entity_id: input_boolean.medication_acknowledged
     speech:
       text: Great, I've marked your medication as taken.
+
+  # "I took my evening/night pills" / "I took my second medicine" — medication 2.
+  ElderMedicationTaken2:
+    action:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.medication_acknowledged_2
+    speech:
+      text: Great, I've marked your second medication as taken.
 
   # "I put the {thing} {prep} {location}"
   ElderStoreThingLocation:
@@ -288,3 +318,43 @@ intent_script:
 # name it "Reminders". That yields todo.reminders, which the dashboard's
 # to-do-list card and Hermes/voice "add to my list" flows write to.
 # (The Local To-do integration cannot be set up from YAML/packages.)
+
+# -----------------------------------------------------------------------------
+# Hub-down watchdog (dead-man's switch) — COMMENTED OUT, opt-in
+# -----------------------------------------------------------------------------
+# THE BLIND SPOT: no automation inside Home Assistant can tell you that HA itself
+# (or the whole hub) is DOWN — a dead box sends nothing, and a stopped automation
+# cannot report that it stopped. The only fix is an EXTERNAL dead-man's switch:
+# HA pings a healthcheck URL every few minutes; if the pings STOP, that external
+# service (not HA) alerts the caregiver. This is what catches a crashed hub, a
+# pulled plug, or a dead internet connection.
+#
+# Use healthchecks.io (free tier) or a self-hosted Healthchecks instance.
+#
+# TO ENABLE:
+#   1. Create a check at https://healthchecks.io — period 5 min, grace ~10–15 min —
+#      and copy its ping URL. Configure that check to email / SMS / push the
+#      CAREGIVER when it goes down (that alert is the whole point).
+#   2. Uncomment the two blocks below and replace YOUR-UUID-HERE with your ping URL.
+#   3. Restart Home Assistant.
+#
+# Left COMMENTED so the package still loads with ZERO external dependencies.
+#
+# rest_command:
+#   heartbeat_ping:
+#     url: "https://hc-ping.com/YOUR-UUID-HERE"   # paste your healthchecks.io ping URL
+#     method: get
+#     timeout: 10
+#
+# automation:
+#   - alias: ElderAssist Heartbeat
+#     description: >-
+#       Ping the external dead-man's switch every 5 minutes. If HA or the hub dies,
+#       the pings stop and healthchecks.io alerts the caregiver — catching the one
+#       failure mode no in-HA automation can self-report.
+#     triggers:
+#       - trigger: time_pattern
+#         minutes: "/5"
+#     actions:
+#       - action: rest_command.heartbeat_ping
+#     mode: single

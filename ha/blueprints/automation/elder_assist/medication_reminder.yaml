@@ -8,10 +8,21 @@
 #     2. Waits for acknowledgment — the elder saying "I took my medicine"
 #        (voice intent flips the input_boolean), tapping the dashboard tile,
 #        or tapping the notification button — for up to `grace_minutes`.
-#     3. If acknowledged in time: done, and it resets the acknowledgment flag.
+#     3. If acknowledged in time: done. The flag is LEFT ON so the PWA/dashboard
+#        "taken today" state persists for the rest of the day. It is cleared by
+#        step 1 (the reset) at the START of the next dose's run, not here.
 #     4. If NOT acknowledged in time: announces once more AND fires an
-#        escalation notification to a caregiver (e.g. notify.family_signal),
-#        then resets the flag so tomorrow starts clean.
+#        escalation notification to a caregiver (e.g. notify.family_signal).
+#        (The flag is likewise left as-is; the next run's step 1 resets it.)
+#
+# CAVEATS
+#   1. OVERLAPPING GRACE WINDOWS: if two dose times of the SAME medication are
+#      closer together than grace_minutes, one acknowledgment can satisfy both
+#      (the flag is already ON when the second run starts, so it never resets in
+#      time). Keep grace_minutes SHORTER than the gap between this medication's
+#      dose times.
+#   2. DST: a dose time that falls inside the spring-forward gap (the hour that
+#      does not exist that day) is simply SKIPPED for that day.
 #
 # WHY THIS SHAPE
 #   * mode: parallel — several dose times a day can be mid-wait at once.
@@ -27,7 +38,11 @@ blueprint:
   name: ElderAssist — Medication reminder (escalating)
   description: >-
     Announce a medication reminder, require acknowledgment, and escalate to a
-    caregiver if it is not acknowledged within a grace period.
+    caregiver if it is not acknowledged within a grace period. After a genuine
+    acknowledgment the flag is left ON so "taken today" persists on the PWA/dashboard
+    for the rest of the day; it is reset at the start of the next dose's run. Keep the
+    grace period shorter than the gap between this medication's dose times (see the
+    caveats in the file header).
   domain: automation
   source_url: https://github.com/bedardandy/elder-assist-ai/blob/main/ha/blueprints/automation/elder_assist/medication_reminder.yaml
   input:
@@ -70,6 +85,21 @@ blueprint:
           multiple: true
           filter:
             - domain: media_player
+
+    announce_volume:
+      name: Announce volume (optional)
+      description: >-
+        Set the announce speakers to this volume (0–100) before speaking — useful
+        for HEARING LOSS. 0 (the default) leaves the current volume unchanged. On the
+        timeout repeat the volume is raised by 10 (capped at 100) — "louder on repeat".
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 5
+          unit_of_measurement: "%"
+          mode: slider
 
     tts_engine:
       name: Text-to-speech engine
@@ -154,6 +184,7 @@ conditions:
 variables:
   medication: !input medication
   announce_targets: !input announce_targets
+  announce_volume: !input announce_volume
   tts_engine: !input tts_engine
   ack_boolean: !input ack_boolean
   notify_device: !input notify_device
@@ -167,6 +198,17 @@ actions:
   - action: input_boolean.turn_off
     target:
       entity_id: !input ack_boolean
+
+  # ---- 0. Optional: set announce volume (hearing-loss aid) ------------------
+  - if:
+      - condition: template
+        value_template: "{{ (announce_volume | int(0)) > 0 }}"
+    then:
+      - action: media_player.volume_set
+        target:
+          entity_id: "{{ announce_targets }}"
+        data:
+          volume_level: "{{ (announce_volume | int) / 100 }}"
 
   # ---- 1. Announce out loud -------------------------------------------------
   - if:
@@ -215,6 +257,16 @@ actions:
       - condition: template
         value_template: "{{ wait.trigger is none }}"
     then:
+      # Louder on repeat: bump the announce volume by 10 (capped at 100).
+      - if:
+          - condition: template
+            value_template: "{{ (announce_volume | int(0)) > 0 }}"
+        then:
+          - action: media_player.volume_set
+            target:
+              entity_id: "{{ announce_targets }}"
+            data:
+              volume_level: "{{ ([ (announce_volume | int) + 10, 100 ] | min) / 100 }}"
       # Repeat the announcement once.
       - if:
           - condition: template
@@ -242,7 +294,6 @@ actions:
             target:
               entity_id: counter.reminders_missed
 
-  # ---- Reset for the next dose ---------------------------------------------
-  - action: input_boolean.turn_off
-    target:
-      entity_id: !input ack_boolean
+  # NOTE: the ack flag is intentionally NOT reset here. Leaving it ON after an
+  # acknowledgment lets the PWA/dashboard show "taken today" for the rest of the
+  # day. The reset happens at the START of the next dose's run (step 1 above).

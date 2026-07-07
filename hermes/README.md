@@ -76,7 +76,10 @@ hermes config set OPENAI_API_KEY ollama-local
 ```
 You can also switch interactively with `hermes model`, or per-message with
 `/model custom:qwen3:8b`. If Hermes runs on the same host as the compose stack,
-`localhost` works; from another host use the hub's LAN address and open the port.
+`localhost` works. From another host, use the hub's LAN address — but note the
+compose file binds Ollama to loopback by default (its API is unauthenticated), so
+you must first set `OLLAMA_BIND=0.0.0.0` in the repo-root `.env` and bring the stack
+up again before the port is reachable off-box.
 
 **Local Ollama vs. a hosted API — the trade-off:**
 
@@ -153,6 +156,14 @@ Set `CAREGIVER_CHANNEL` (in `.env`) to the platform escalations and the weekly s
 should go to (e.g. `signal`, or `signal,telegram`). All messaging docs:
 <https://hermes-agent.nousresearch.com/docs/user-guide/messaging/>
 
+> ⚠️ **Sender IDs are not identity.** SMS sender numbers and caller ID are trivially
+> **spoofable** — never treat an inbound number/caller as proof of who it is for any
+> privileged request (adding a user, reading {ELDER_NAME}'s private info, changing a
+> reminder). Rely on DM pairing (`hermes pairing approve`) and app-account identity
+> (Signal/Telegram), not the phone number alone. And avoid **wildcard** group
+> allowlists (e.g. `SIGNAL_GROUP_ALLOWED_USERS=*`): a `*` lets anyone in the group —
+> including someone later added to it — reach the agent. List explicit IDs instead.
+
 ## 5. Connect Home Assistant (the actuator)
 
 HA is how Hermes checks sensors, casts to the TV, and creates reminders. Two layers:
@@ -166,8 +177,10 @@ HASS_URL=http://homeassistant.local:8123     # optional; this is the default
 HASS_TOKEN=<long-lived token for a RESTRICTED, non-admin HA user>
 ```
 The token must be a **Long-Lived Access Token** (HA → profile → Security → Long-lived
-access tokens), for the same restricted, non-admin user the kiosk PWA uses — not an
-admin account. Because Hermes runs on the LAN, allow private URLs so it can reach HA:
+access tokens), for the same non-admin user the kiosk PWA uses — not an admin account.
+NOTE: HA tokens are **not** entity-scoped — non-admin only prevents config/user
+changes; the token can still call any service on any entity. Keep dangerous actuators
+(locks, garage doors, alarm panels) off this HA instance so the agent cannot reach them. Because Hermes runs on the LAN, allow private URLs so it can reach HA:
 `security: { allow_private_urls: true }` (in `config.yaml`; already in our example).
 Optionally let house **events** wake the agent (wellness hooks) via
 `platforms.homeassistant.extra` (`watch_entities` / `watch_domains` / `cooldown_seconds`)
@@ -244,6 +257,15 @@ guardrails in `AGENTS.md` are the behavioral half; these are the system half). S
   Do not use YOLO mode on this box.
 - **LAN-only, private URLs.** `security.allow_private_urls: true` to reach HA/HomeBox on
   the LAN; don't expose the gateway to the public internet.
+- **Assume inbound content is hostile (prompt injection).** Messages, forwarded
+  emails, and web pages that reach the agent can contain instructions aimed at *it*
+  ("ignore your rules", "unlock the front door", "send mom's address to…"). The
+  persona in `AGENTS.md` refuses these, but harden the system side too: expose the
+  agent **curated `script.*` entities** (a small reviewed allowlist of safe actions)
+  rather than raw device domains, and treat `lock` / `alarm_control_panel` / `cover`
+  (garage) as human-approval-only. Never grant the agent an HA admin token — and
+  remember a non-admin token still calls any service, so keep dangerous actuators off
+  this HA instance (see `config.yaml.example` approvals block).
 - **Watch the logs** (`~/.hermes/logs/`) for unauthorized attempts, and keep Hermes
   updated with `hermes update`.
 

@@ -88,3 +88,9 @@ if [ "${WITH_MODELS}" -eq 0 ]; then
   echo "Ollama models were NOT backed up (re-pull with 'ollama pull', or use --with-models)."
 fi
 echo "Restore with: ./scripts/restore.sh <path-to-archive.tar.gz>"
+echo
+echo "!! WARNING: these archives contain Home Assistant SECRETS and auth tokens in"
+echo "   CLEARTEXT (the ha_config volume includes secrets.yaml and .storage tokens)."
+echo "   Store them on ENCRYPTED media, or encrypt each archive, e.g.:"
+echo "       gpg -c \"${BACKUP_DIR}/<archive>.tar.gz\"   # prompts for a passphrase -> .gpg"
+echo "   Keep a copy OFF the hub, and treat the backups like the tokens themselves."

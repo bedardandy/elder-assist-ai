@@ -6,9 +6,9 @@ const BUTTONS = [
   { path: '/call',     cls: 'call',   icon: '📞', label: 'Call Family' },
   { path: '/medicine', cls: 'med',    icon: '💊', label: 'My Medicine' },
   { path: '/today',    cls: 'today',  icon: '📅', label: 'Today' },
-  { path: '/ask',      cls: 'ask',    icon: '🙋', label: 'Ask for Help' },
+  { path: '/help',     cls: 'ask',    icon: '🙋', label: 'Get Help' },
   { path: '/tv',       cls: 'tv',     icon: '📺', label: 'TV' },
-  { path: '/things',   cls: 'things', icon: '🔍', label: 'My Things' },
+  { path: '/things',   cls: 'things', icon: '🔍', label: 'Find My Things' },
 ];
 
 export default function mountHome() {

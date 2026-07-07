@@ -50,7 +50,8 @@ views:
                 show_state: false
                 tap_action:
                   action: perform-action
-                  perform_action: notify.family_signal   # EDIT: your caregiver notify service
+                  # EDIT: set to your caregiver notify service (e.g. notify.family_signal)
+                  perform_action: notify.notify
                   data:
                     title: Help requested
                     message: "Help was requested from the ElderAssist tablet."

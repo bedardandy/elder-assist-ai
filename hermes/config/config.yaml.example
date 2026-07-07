@@ -59,6 +59,13 @@ approvals:
     - "*shutdown*"
     - "*reboot*"
     - "git push --force*"
+  # --- Home Assistant actuator hygiene (prompt-injection defense) ------------
+  # Prefer exposing the agent CURATED `script.*` entities (a small, reviewed set of
+  # safe actions) rather than raw device domains. Treat the `lock`,
+  # `alarm_control_panel`, and `cover` (garage/door) domains as requiring HUMAN
+  # APPROVAL — never let an injected instruction unlock a door or disarm an alarm.
+  # And never give the agent an HA ADMIN token (a non-admin token still calls any
+  # service, so keep those dangerous actuators off this HA instance entirely).
 
 # Restrict the agent's working directory (production hardening).
 terminal:

@@ -26,6 +26,9 @@ export default function mountMedicine(ctx) {
   }
 
   const entity = med.acknowledgedEntity;
+  // Derive the service domain from the entity id (e.g. input_boolean, switch),
+  // rather than hardcoding input_boolean, so a switch.* / other toggle works too.
+  const domain = (entity && entity.includes('.')) ? entity.split('.')[0] : 'input_boolean';
   if (!entity || !ha.configured) {
     body.append(el('div', { style: 'margin-top:1.4rem' }, [
       note('The “I took it” button isn’t connected yet. A caregiver can set it up in config.js.'),
@@ -51,7 +54,7 @@ export default function mountMedicine(ctx) {
         btn.disabled = true;
         btn.textContent = 'Saving…';
         try {
-          await ha.callService('input_boolean', 'turn_on', { entity_id: entity });
+          await ha.callService(domain, 'turn_on', { entity_id: entity });
           const st = await ha.getState(entity);
           const on = st && st.state === 'on';
           renderTaken(on);
@@ -76,7 +79,7 @@ export default function mountMedicine(ctx) {
       const btn = el('button.action', { type: 'button' }, ['I TOOK IT ✓']);
       btn.addEventListener('click', async () => {
         btn.disabled = true; btn.textContent = 'Saving…';
-        try { await ha.callService('input_boolean', 'turn_on', { entity_id: entity }); renderTaken(true); }
+        try { await ha.callService(domain, 'turn_on', { entity_id: entity }); renderTaken(true); }
         catch (err) { btn.disabled = false; btn.textContent = 'I TOOK IT ✓'; statusWrap.replaceChildren(banner(err.message || ha.friendly())); }
       });
       actionWrap.replaceChildren(btn);

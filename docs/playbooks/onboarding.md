@@ -150,14 +150,16 @@ Set these up during install. The core principle (from `docs/ARCHITECTURE.md` and
 |---|---|---|---|
 | **Operator** | Usually one primary caregiver (you) | HA admin login, Hermes host access, `.env`, this repo | Everything: install, configure blueprints, add/remove users, see all data, run `scripts/backup.sh` |
 | **Family user** | Siblings, spouse, other adult kids | A non-admin login and/or a chat channel to Hermes | Chat with the agent, add appointments, see medication adherence, receive escalations. **Cannot** change automations or add users |
-| **The elder** | Your parent | Nothing to remember — the kiosk is PIN-less | Use the six buttons, talk to the voice assistant, mute the mic, call people. A **capability-scoped, non-admin** HA token drives their surfaces (see `docs/ARCHITECTURE.md`) so a tap can never wander into admin settings |
+| **The elder** | Your parent | Nothing to remember — the kiosk is PIN-less | Use the six buttons, talk to the voice assistant, mute the mic, call people. A **non-admin** HA token drives their surfaces (see `docs/ARCHITECTURE.md`) so a tap can never wander into admin settings. NOTE: HA tokens are not entity-scoped — the safeguard is keeping locks/garage/alarm actuators off this HA instance, and treating the tablet like a house key |
 
 Rules of thumb:
 - **One Operator, clearly named.** Two people both "sort of" admining leads to nobody
   owning the backups. Pick the person; others are Family users.
 - **The elder's surface never asks for a password.** That's deliberate — a login screen
-  is exactly the barrier this system exists to remove. Security comes from the token
-  being capability-scoped, not from a PIN they'll forget.
+  is exactly the barrier this system exists to remove. The token is non-admin (no
+  config/user changes), not entity-scoped — so security comes from keeping dangerous
+  actuators off this HA instance and treating the tablet like a house key, not from a
+  PIN they'll forget.
 - **Family users get the least access that does the job.** A sibling who just wants the
   "she took her meds" peace of mind doesn't need HA admin.
 
@@ -182,6 +184,14 @@ Set these on both sides. Overselling is how these systems get resented and unplu
   records; a human and a doctor decide (`docs/ARCHITECTURE.md`, trust model).
 - **Order anything by itself.** The refill workflow always stops for a human to confirm
   (`medication.md`). No autonomous purchasing, ever.
+- **Tell two people apart.** v1 assumes **one primary elder user per install**. A couple
+  sharing one tablet can't be distinguished for medication acknowledgments or the
+  by-name greeting — a tap on "I took it" or an "I took my pills" is recorded against the
+  household's single medication slot, whoever pressed it. Partial workarounds: use the
+  **second** medication boolean for a second person (or a second medication) and lean on
+  the morning/evening voice phrasing — but that's ambiguous if both take pills at both
+  times. The clean answer is a **separate tablet (and HA user) per person**. Proper
+  multi-elder support is a roadmap item (`docs/ROADMAP.md`).
 
 ### Failure etiquette (teach this to everyone, including yourself)
 When the assistant flubs — mishears, reads the wrong reminder, can't find the show:
@@ -196,6 +206,27 @@ When the assistant flubs — mishears, reads the wrong reminder, can't find the 
   a 20-minute caregiver troubleshooting session at their kitchen table turns "my
   helper" into "my kids' project that I'm the guinea pig for."
 
+### If they start to resent it
+
+Regression is **normal**, not a failure — the honeymoon fades, a feature starts to
+grate, or a cognitive change makes something that worked last month confusing now. Catch
+it early and scale back gracefully:
+
+- **Scale back, don't dig in.** Turn off the parts that annoy (usually **voice** first)
+  and keep the two that earn their place — **calling** and **reminders**. A smaller
+  system they actually use beats a full one they've unplugged.
+- **Blame the computer, never the person.** Same rule as failure etiquette: "let's turn
+  that part off, it's more trouble than it's worth" — never "you're not using it right."
+- **Frame changes as simplifying, not taking away.** "We made it simpler" lands as care;
+  "we had to remove that because you couldn't manage it" wounds. Same change, opposite
+  feeling.
+- **Re-consent periodically, and ALWAYS after any cognitive change.** What they agreed to
+  in §2 can stop being right. A new diagnosis, a hospital stay, more confusion — revisit
+  consent and right-size the features. Their yes is not permanent.
+- **Removing features is success.** Right-sizing to what still helps is the system
+  working as intended, not the project failing. The goal was always *their* dignity and
+  ease, not feature count.
+
 ---
 
 ## 6. Cheat sheet for the elder (print this page)
@@ -209,16 +240,16 @@ zero passwords. This is the whole system, as far as they need to know.
 
 | To do this… | Do this |
 |---|---|
-| **Call my family** | Tap the big **Call** button, then tap their photo |
-| **See my reminders** | Tap the big **Reminders** button |
-| **Say I took my medicine** | Tap the green **I took it** button when it asks — or say *"I took my medicine"* |
-| **Ask a question** | Say *"OK Nabu"*, wait for the beep, then ask |
+| **Call my family** | Tap the big **Call Family** button, then tap their photo |
+| **See my day** | Tap the big **Today** button |
+| **Say I took my medicine** | Tap **My Medicine**, then the big **I TOOK IT** button — or say *"I took my medicine"* |
+| **Ask a question** | Say *"OK Nabu"*, wait for the beep, then ask — or tap **Get Help**, then **Ask a Question** |
 | **Put on the TV** | Tap **TV**, then the show — or say *"OK Nabu, put on the news"* |
-| **Find one of my things** | Tap **My Things**, or ask *"OK Nabu, where is the spare key?"* |
-| **Get help / see who to call** | Tap the big **Help** button |
+| **Find one of my things** | Tap **Find My Things**, or ask *"OK Nabu, where is the spare key?"* |
+| **Get help / see who to call** | Tap the big **Get Help** button |
 | **Make it stop listening** | Press the **microphone mute** button |
 
-**If it's being silly:** it's the computer, not you. Tap **Call** and reach us the
+**If it's being silly:** it's the computer, not you. Tap **Call Family** and reach us the
 normal way — that button always works.
 
 **Emergency:** this is not a medical alarm. For an emergency, call **911**.

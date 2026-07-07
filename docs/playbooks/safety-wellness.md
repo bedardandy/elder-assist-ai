@@ -113,6 +113,15 @@ Anti-fatigue rules:
 Escalation targets and timing align with the medication escalations in `medication.md` —
 keep them consistent so the family learns one mental model.
 
+> **What v1 ships vs. what you design.** Be clear-eyed about the gap: the shipped
+> blueprints send **one notification to one target** — fire-and-forget, no
+> acknowledgment tracking, no read-receipts. The staged, sequential multi-person chain
+> described above is a **design pattern you build**, not an out-of-the-box feature. To
+> get Stage 2, you assemble it yourself — e.g. **duplicate the blueprint** with a second
+> target and a longer grace, or point the escalation at an **HA notify group** — and you
+> won't know whether Stage 1 was actually seen (there are no read-receipts). Plan the
+> chain on paper, then wire it from these single-shot parts.
+
 ---
 
 ## 5. What this is NOT
@@ -185,3 +194,30 @@ the network — and also in the app for whoever's remote.
       **for an emergency, call 911** (`onboarding.md` cheat sheet).
 - [ ] **Keep both in sync.** When meds or contacts change, update the fridge card *and*
       the Help page the same day. A stale emergency card is a dangerous one.
+
+---
+
+## 9. When the hub itself dies (the watchdog blind spot)
+
+Be honest about this one: **no automation inside Home Assistant can tell you that HA
+itself, or the whole hub, has died.** A crashed process, a pulled plug, a dead internet
+line, a failed SD card — the box simply goes silent, and a stopped automation can't
+report that it stopped. Every reminder and escalation in this repo depends on the hub
+being alive, so a dead hub silently takes them all with it.
+
+The fix is an **external dead-man's switch**: the hub pings a healthcheck service every
+few minutes, and if the pings *stop*, that external service — not the hub — alerts the
+caregiver.
+
+- [ ] **Create a check** at [healthchecks.io](https://healthchecks.io) (free tier) or a
+      self-hosted Healthchecks instance. Set the period to 5 minutes and a grace of
+      ~10–15 minutes.
+- [ ] **Point its failure alert at the caregiver** (email / SMS / push). *This* alert —
+      "the hub hasn't checked in" — is the whole point.
+- [ ] **Enable the ping in HA.** Uncomment the `rest_command: heartbeat_ping` +
+      `automation: ElderAssist Heartbeat` block in `ha/packages/elder_assist.yaml`,
+      paste your ping URL, and restart HA. It's shipped commented so the package loads
+      with zero external dependencies until you opt in.
+
+This costs nothing and closes the scariest gap: it catches the failure no in-house
+automation ever can — the house going dark.

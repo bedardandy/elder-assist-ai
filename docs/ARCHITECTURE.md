@@ -90,7 +90,7 @@ capability — per-family choice, documented trade-off.
 
 | Surface | What it is | Runs on |
 |---|---|---|
-| **Kiosk PWA** | This repo's `pwa/` — 6 giant buttons (Call, Reminders, Ask, TV, My Things, Help), voice-first, senior-legible typography | Kitchen tablet, Android/iPhone home screen |
+| **Kiosk PWA** | This repo's `pwa/` — 6 giant buttons (Call Family, My Medicine, Today, Get Help, TV, Find My Things), voice-first, senior-legible typography | Kitchen tablet, Android/iPhone home screen |
 | **Voice satellites** | HA Voice Preview Edition puck (~$60), or a Wyoming satellite on any old phone/Pi | Each room |
 | **The TV** | HA casts dashboards, photos, step-by-step instruction cards | Existing Chromecast/Android TV |
 | **The phone they already have** | Signal/WhatsApp chat with Hermes; big-icon launcher recommended | Their phone |
@@ -120,12 +120,23 @@ capability — per-family choice, documented trade-off.
 - **Explicit egress**: each cloud touchpoint (Zoom, WhatsApp, pharmacy, hosted LLM) is
   a labeled toggle with its own doc section; none are required for core operation.
 - **The elder is not the admin**: caregiver holds admin creds; elder surfaces are
-  PIN-less but capability-scoped (long-lived HA token restricted to a non-admin user).
+  PIN-less and driven by a long-lived HA token for a **non-admin** user (cannot
+  change config/users). NOTE: HA tokens are **not** entity-scoped — that token can
+  still call any service on any entity via the REST API, so the real mitigation is
+  keeping dangerous actuators (locks, garage doors, alarm panels) off this HA
+  instance, and treating the tablet like a house key.
 - **Consent first**: location tracking, camera use, and conversation memory are
   family conversations before they are config flags. `docs/playbooks/onboarding.md`
   includes a consent checklist.
+- **Single-elder assumption (v1)**: each install targets **one primary elder user**;
+  a couple sharing one tablet can't be told apart for medication acks or greetings
+  (use a separate tablet/HA user per person). Multi-elder support is a roadmap item.
 - **No medical decisions**: the assistant reminds and records; it never advises on
   dosage or diagnosis. Guardrails live in the Hermes persona and skill prompts.
+- **Hub-down watchdog**: no in-HA automation can report that the hub itself is dead, so
+  we recommend an external dead-man's-switch heartbeat (healthchecks.io or self-hosted)
+  that alerts the caregiver if pings stop — shipped commented in the HA package
+  (`docs/playbooks/safety-wellness.md` §9).
 
 ## Hardware guidance
 

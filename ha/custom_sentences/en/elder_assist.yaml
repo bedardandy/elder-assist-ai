@@ -24,13 +24,24 @@ intents:
           - "in {minutes} [minute|minutes] remind me to {message}"
           - "set a reminder to {message} in {minutes} [minute|minutes]"
 
-  # "I took my pills"
+  # "I took my pills" — the GENERIC phrase maps to medication slot 1. For a two-med
+  # regimen, use the morning/evening phrasing (or the tablet) to hit the right slot.
+  # "I took my morning ..." also resolves here (medication 1).
   ElderMedicationTaken:
     data:
       - sentences:
           - "I (took|have taken|took my|have taken my|took the) (medicine|pills|medication|meds|tablets)"
           - "I've taken my (medicine|pills|medication|meds|tablets)"
           - "(I already took|already took) my (medicine|pills|medication|meds|tablets)"
+          - "I took my morning (medicine|pills|medication)"
+
+  # "I took my evening pills" — second medication slot (input_boolean.medication_acknowledged_2)
+  ElderMedicationTaken2:
+    data:
+      - sentences:
+          - "I took my (evening|night) (medicine|pills|medication)"
+          - "I've taken my (evening|night) (medicine|pills|medication)"
+          - "I took my second (medicine|pill)"
 
   # "I put the keys on the counter"
   ElderStoreThingLocation:
@@ -59,7 +70,7 @@ lists:
   minutes:
     range:
       from: 1
-      to: 240
+      to: 1440   # match script.remind_me_in (up to 24h)
   # Preposition slot — also the required literal boundary between the two
   # wildcards in the "I put the {thing} {prep} {location}" sentence.
   prep:

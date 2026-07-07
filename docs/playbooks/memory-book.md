@@ -179,3 +179,8 @@ Protect it.
       real before you need it.
 - [ ] Do a fresh backup right after the big rating-plate walk (§2) — that's when you've
       just added the most, and have the most to lose.
+- [ ] **Back up Hermes memory separately.** The agent's household memory lives in
+      `~/.hermes/` (not a Docker volume), so `scripts/backup.sh` does **not** capture
+      it. Archive `~/.hermes/` on its own schedule — and because both it and the volume
+      archives hold secrets/tokens in cleartext, store them on encrypted media (or
+      `gpg -c` each archive).

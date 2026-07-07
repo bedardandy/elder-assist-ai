@@ -2,32 +2,37 @@
 
 import { el, pageShell, banner, speak } from '../ui.js';
 
+/* Build a Jitsi URL for the caregiver. Returns null if no room/url is configured
+ * — we NEVER fall back to a guessable default room name (a public meet.jit.si
+ * room is open to anyone who knows its name). */
 function jitsiUrl(config, cg) {
   if (cg.url) return cg.url;
+  if (!cg.jitsiRoom) return null;
   const base = (config.jitsiBase || 'https://meet.jit.si').replace(/\/+$/, '');
-  const room = encodeURIComponent(cg.jitsiRoom || 'ElderAssist-Care');
+  const room = encodeURIComponent(cg.jitsiRoom);
   return `${base}/${room}#config.prejoinConfig.enabled=false&config.prejoinPageEnabled=false&config.disableDeepLinking=true`;
 }
 
 export default function mountHelp(ctx) {
   const { config, ha } = ctx;
   const cg = config.caregiver || {};
-  const view = pageShell('Ask for Help');
+  const view = pageShell('Get Help');
   const body = view._body;
 
   const name = cg.name || 'your caregiver';
+  const videoUrl = jitsiUrl(config, cg);
+  const canVideo = cg.type === 'video' && !!videoUrl;
+  const canReach = cg.phone || canVideo;
 
-  // 1) Big "Call caregiver" button.
-  if (cg.phone || cg.jitsiRoom || cg.url) {
-    const wantsVideo = cg.type === 'video' && (cg.jitsiRoom || cg.url);
+  // 1) Big "Call caregiver" button (EMERGENCY actions come first).
+  if (canReach) {
     const callBtn = el('button.action', { type: 'button', style: 'margin-bottom:1.4rem' }, [`📞 Call ${name}`]);
     callBtn.addEventListener('click', () => {
-      if (wantsVideo) {
-        window.open(jitsiUrl(config, cg), '_blank', 'noopener');
+      // Prefer video only when a real room/url is configured; else dial the phone.
+      if (canVideo) {
+        window.open(videoUrl, '_blank', 'noopener');
       } else if (cg.phone) {
         window.location.href = 'tel:' + cg.phone.replace(/[^\d+]/g, '');
-      } else {
-        window.open(jitsiUrl(config, cg), '_blank', 'noopener');
       }
     });
     body.append(callBtn);
@@ -45,8 +50,8 @@ export default function mountHelp(ctx) {
         const objectId = scriptEntity.includes('.') ? scriptEntity.split('.')[1] : scriptEntity;
         // script.turn_on works for any script entity id.
         await ha.callService('script', 'turn_on', { entity_id: 'script.' + objectId });
-        status.replaceChildren(el('span.status-pill.yes', {}, ['✓ ', `${name} has been told. Help is on the way.`]));
-        speak(`I have told ${name}. Help is on the way. You are okay.`, config.language);
+        status.replaceChildren(el('span.status-pill.yes', {}, ['✓ ', `I have told ${name}.`]));
+        speak(`I have told ${name}. If you are in danger, call 911 now. You are okay.`, config.language);
       } catch (e) {
         alarmBtn.disabled = false;
         alarmBtn.textContent = '🆘 Something is wrong';
@@ -59,10 +64,19 @@ export default function mountHelp(ctx) {
   // 3) Reassurance.
   body.append(el('div.card', { style: 'cursor:default;display:block' }, [
     el('p', { style: 'font-size:var(--fs-lead);font-weight:700;margin:0 0 .6rem' }, 'You are safe.'),
-    el('p', { style: 'font-size:var(--fs-body);margin:0' }, `If you feel unwell or frightened, tap the red button above and ${name} will be told right away. In a real emergency, call your local emergency number.`),
+    el('p', { style: 'font-size:var(--fs-body);margin:0' }, `If you feel unwell or frightened, tap the red button above and ${name} will be told. If you are in danger, call 911 now.`),
   ]));
 
-  if (!(cg.phone || cg.jitsiRoom || cg.url) && !(scriptEntity && ha.configured)) {
+  // 4) Ask a Question — the AI chat page, kept reachable but visually calm and
+  //    placed BELOW the emergency actions so it never competes with them.
+  const askBtn = el('a.action.ask-tile', {
+    href: '#/ask',
+    role: 'button',
+    style: 'margin-top:1.4rem;background:var(--c-ask)',
+  }, ['Ask a Question 🗣️']);
+  body.append(askBtn);
+
+  if (!canReach && !(scriptEntity && ha.configured)) {
     body.insertBefore(banner('Help contacts aren’t set up yet. A caregiver can add them in config.js.'), body.firstChild);
   }
 

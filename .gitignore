@@ -3,6 +3,10 @@
 .env
 .env.local
 
+# Kiosk PWA runtime config — holds a LIVE Home Assistant long-lived token.
+# Only the template (config.example.js) is committed; the filled-in copy is not.
+pwa/config.js
+
 # Local backups produced by scripts/backup.sh
 backups/
 *.tar.gz

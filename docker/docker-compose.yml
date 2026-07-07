@@ -102,7 +102,10 @@ services:
     container_name: elderassist-ollama
     restart: unless-stopped
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      # Ollama's API is UNAUTHENTICATED. Bind to loopback by default so it is not
+      # reachable from the LAN. Only if another host needs it (e.g. Hermes running
+      # on a different machine) set OLLAMA_BIND=0.0.0.0 in .env.
+      - "${OLLAMA_BIND:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_models:/root/.ollama
     environment:
@@ -249,7 +252,9 @@ services:
     restart: unless-stopped
     profiles: ["webui"]
     ports:
-      - "${OPENWEBUI_PORT:-3000}:8080"
+      # Operator tool with its own login, but bind to loopback by default anyway.
+      # Set WEBUI_BIND=0.0.0.0 in .env only if you need to reach it from another host.
+      - "${WEBUI_BIND:-127.0.0.1}:${OPENWEBUI_PORT:-3000}:8080"
     volumes:
       - openwebui_data:/app/backend/data
     environment:

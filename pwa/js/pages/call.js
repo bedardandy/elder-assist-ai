@@ -1,7 +1,7 @@
 /* call.js — person cards. Video → Jitsi (prejoin skipped). Phone → tel:.
  * Emergency / caregiver card is pinned first and visually distinct. */
 
-import { el, avatar, note, speak, stopSpeaking } from '../ui.js';
+import { el, avatar, note, banner, speak, stopSpeaking } from '../ui.js';
 
 /** Build a Jitsi URL that skips the prejoin screen. */
 function jitsiUrl(config, contact) {
@@ -33,12 +33,20 @@ function showCalling(name, onProceed) {
   }
   document.body.append(overlay);
   speak(`Calling ${name}`);
-  // Give the elder a moment to read/cancel, then open the call.
+  // Give the elder an unhurried moment to read/cancel, then open the call.
   setTimeout(() => {
     if (cancelled) return;
     onProceed();
     cleanup();
-  }, 1800);
+  }, 3500);
+}
+
+/** Show the friendly banner used elsewhere at the top of the page body. */
+function showBanner(fromCard, message) {
+  const body = fromCard.closest('.page-body') || fromCard.closest('.view');
+  if (!body) return;
+  const b = banner(message);
+  body.insertBefore(b, body.firstChild);
 }
 
 function contactCard(config, contact, { emergency = false } = {}) {
@@ -66,7 +74,7 @@ function contactCard(config, contact, { emergency = false } = {}) {
       // tel: works on devices with a SIM / FaceTime.
       window.location.href = 'tel:' + contact.phone.replace(/[^\d+]/g, '');
     } else {
-      alert(`No way to reach ${contact.name} is set up yet.`);
+      showBanner(card, `No way to reach ${contact.name} is set up yet. A caregiver can add a phone number or video room in config.js.`);
     }
   });
   return card;
