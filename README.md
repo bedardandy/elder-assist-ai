@@ -113,6 +113,12 @@ hardware? [docs/playbooks/hardware-and-shopping.md](docs/playbooks/hardware-and-
 has the common configurations and exact search terms. Treat it as a strong
 starting kit, not a product with a support contract.
 
+**Contributing or taking over development?** Start with
+[docs/HANDOFF.md](docs/HANDOFF.md) — the full project state, what's verified vs.
+designed-only, and how to resume — and [CLAUDE.md](CLAUDE.md), the working
+rulebook (design invariants, validation steps, hard-won gotchas) that AI coding
+agents load automatically.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
