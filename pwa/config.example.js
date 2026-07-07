@@ -106,6 +106,29 @@ export default {
     ],
   },
 
+  /* ---- Read This For Me (camera → local vision model) -------------------- */
+  // Lets the elder photograph a label, letter, bill, or expiry date and have it
+  // read aloud by the LOCAL vision model (nothing leaves the house — see D11).
+  // Both values must be set or the camera button stays hidden.
+  vision: {
+    // Must match OLLAMA_VISION_MODEL in the hub's .env (pulled by ./setup.sh --vision).
+    model: 'qwen2.5vl:7b',
+    // Must match KIOSK_OLLAMA_KEY in the hub's .env. Like the HA token above,
+    // this key is readable by anyone with device access; it only unlocks the
+    // local vision model (no cloud, no cost), but keep the app LAN-only.
+    kioskKey: '',
+  },
+
+  /* ---- Find My Things: Bluetooth tracker buttons -------------------------- */
+  // Giant "make it beep" buttons shown ABOVE the inventory search. Each calls a
+  // Home Assistant script (shipped in ha/packages/elder_assist.yaml — wire your
+  // tags there first; see ha/README.md "Finding things: Bluetooth trackers").
+  // Leave the list empty to hide the buttons.
+  trackers: [
+    { label: 'My Keys 🔑',   script: 'script.find_keys' },
+    { label: 'My Wallet 👛', script: 'script.find_wallet' },
+  ],
+
   /* ---- My Things (HomeBox) ---------------------------------------------- */
   // If baseUrl + token are set, the search box queries HomeBox directly.
   // If not, the page shows a big tile that opens the HomeBox web app (webUrl).

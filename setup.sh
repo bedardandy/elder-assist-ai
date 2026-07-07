@@ -11,6 +11,7 @@
 #     ./setup.sh --inventory     # + HomeBox
 #     ./setup.sh --grocy         # + Grocy
 #     ./setup.sh --webui         # + Open WebUI operator chat
+#     ./setup.sh --vision        # + pull the local vision model ("Read This For Me")
 #     ./setup.sh --all           # everything above
 #     ./setup.sh --no-pull       # skip pulling the LLM model (do it later)
 #     ./setup.sh --help
@@ -40,15 +41,28 @@ info() { printf '%s->%s %s\n' "${GREEN}" "${RESET}" "$*"; }
 warn() { printf '%s!!%s %s\n' "${YELLOW}" "${RESET}" "$*"; }
 die()  { printf '%sxx%s %s\n' "${RED}" "${RESET}" "$*" >&2; exit 1; }
 
+# Print a random 32-char hex string (openssl, falling back to /dev/urandom).
+# Empty output means neither source was available; callers handle that.
+gen_key() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 16
+  elif [ -r /dev/urandom ]; then
+    head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n'
+  else
+    printf ''
+  fi
+}
+
 # --- Parse flags -----------------------------------------------------------
-WANT_VOICE=0; WANT_INVENTORY=0; WANT_GROCY=0; WANT_WEBUI=0; DO_PULL=1
+WANT_VOICE=0; WANT_INVENTORY=0; WANT_GROCY=0; WANT_WEBUI=0; WANT_VISION=0; DO_PULL=1
 for arg in "$@"; do
   case "${arg}" in
     --voice)     WANT_VOICE=1 ;;
     --inventory) WANT_INVENTORY=1 ;;
     --grocy)     WANT_GROCY=1 ;;
     --webui)     WANT_WEBUI=1 ;;
-    --all)       WANT_VOICE=1; WANT_INVENTORY=1; WANT_GROCY=1; WANT_WEBUI=1 ;;
+    --vision)    WANT_VISION=1 ;;
+    --all)       WANT_VOICE=1; WANT_INVENTORY=1; WANT_GROCY=1; WANT_WEBUI=1; WANT_VISION=1 ;;
     --no-pull)   DO_PULL=0 ;;
     -h|--help)
       grep -E '^# ' "$0" | sed -E 's/^# ?//'
@@ -210,6 +224,47 @@ elif [ "${DO_PULL}" -eq 1 ]; then
   fi
 else
   info "Skipping model pull (--no-pull). Later: docker compose exec ollama ollama pull ${OLLAMA_MODEL}"
+fi
+
+# --- 8b. Vision model + kiosk proxy key (--vision) -------------------------
+# Pull the local vision-language model for "Read This For Me", and make sure the
+# kiosk's Ollama proxy has a key (generate a random one if the caregiver left it
+# blank), then re-apply so the kiosk nginx template picks it up.
+if [ "${WANT_VISION}" -eq 1 ]; then
+  say
+  CURRENT_KEY="$(grep -E '^KIOSK_OLLAMA_KEY=' "${ENV_FILE}" | tail -n1 | cut -d= -f2- || true)"
+  if [ -z "${CURRENT_KEY}" ]; then
+    NEW_KEY="$(gen_key)"
+    if [ -n "${NEW_KEY}" ]; then
+      tmp="$(mktemp)"
+      awk -v k="${NEW_KEY}" '/^KIOSK_OLLAMA_KEY=/{print "KIOSK_OLLAMA_KEY=" k; next} {print}' "${ENV_FILE}" >"${tmp}" && mv "${tmp}" "${ENV_FILE}"
+      info "Generated a random KIOSK_OLLAMA_KEY for the vision proxy."
+      say  "   Put this SAME value in pwa/config.js as 'kioskKey' to enable the camera button."
+      # Recreate the kiosk container so envsubst re-renders the proxy with the key.
+      "${DC[@]}" up -d kiosk >/dev/null
+    else
+      warn "Couldn't generate a random key (no openssl or /dev/urandom)."
+      say  "   Set KIOSK_OLLAMA_KEY in .env by hand, then: docker compose up -d kiosk"
+    fi
+  else
+    info "KIOSK_OLLAMA_KEY already set — keeping it."
+  fi
+
+  VISION_MODEL="$(grep -E '^OLLAMA_VISION_MODEL=' "${ENV_FILE}" | tail -n1 | cut -d= -f2- || true)"
+  VISION_MODEL="${VISION_MODEL:-qwen2.5vl:7b}"
+  if [ "${ready}" -ne 1 ]; then
+    warn "Ollama isn't ready — skipping the vision model pull. Retry later:"
+    say  "   docker compose exec ollama ollama pull ${VISION_MODEL}"
+  elif [ "${DO_PULL}" -eq 1 ]; then
+    info "Pulling vision model '${VISION_MODEL}' (first run downloads several GB)…"
+    if ! "${DC[@]}" exec -T ollama ollama pull "${VISION_MODEL}"; then
+      warn "Vision model pull failed. Retry later: docker compose exec ollama ollama pull ${VISION_MODEL}"
+    else
+      info "Vision model '${VISION_MODEL}' ready."
+    fi
+  else
+    info "Skipping vision model pull (--no-pull). Later: docker compose exec ollama ollama pull ${VISION_MODEL}"
+  fi
 fi
 
 # --- 9. Next steps ---------------------------------------------------------

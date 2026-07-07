@@ -1,8 +1,59 @@
 /* ask.js — voice-first question box to HA Assist.
  * Mic via Web Speech API when available; typed input always works.
- * Replies are shown as big bubbles and spoken aloud. */
+ * Replies are shown as big bubbles and spoken aloud.
+ * Also hosts "Read This For Me": photo → local vision model via the kiosk's
+ * locked-down /ollama proxy (user-initiated capture only — see D11). */
 
 import { el, pageShell, note, speak, stopSpeaking } from '../ui.js';
+
+const VISION_SYSTEM_PROMPT =
+  'You are helping an elderly person read something they photographed. ' +
+  'First read ALL visible text out verbatim. Then briefly explain in plain, warm words what this is. ' +
+  'If the text is blurry or unreadable, say so and ask for a closer, better-lit photo — never guess. ' +
+  'If there is a date, state it plainly, like "September 12, 2026". ' +
+  'Use short sentences. Never give medical dosage advice — suggest asking the doctor or family instead.';
+
+/* Downscale a photo to <=1280px JPEG and return the base64 payload (no data: prefix). */
+function downscale(file, maxDim = 1280, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+      } catch (e) { reject(e); } finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+    img.src = url;
+  });
+}
+
+/* Ask the local vision model to read a photo. Served same-origin by the kiosk
+ * nginx proxy, which only forwards when the key matches (closed by default). */
+async function readPhoto(base64, vision) {
+  const res = await fetch('/ollama/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Kiosk-Key': vision.kioskKey },
+    body: JSON.stringify({
+      model: vision.model,
+      stream: false,
+      messages: [
+        { role: 'system', content: VISION_SYSTEM_PROMPT },
+        { role: 'user', content: 'Please read this for me.', images: [base64] },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error('vision http ' + res.status);
+  const data = await res.json();
+  const text = data && data.message && data.message.content;
+  if (!text) throw new Error('empty vision reply');
+  return text.trim();
+}
 
 export default function mountAsk(ctx) {
   const { config, ha } = ctx;
@@ -103,7 +154,44 @@ export default function mountAsk(ctx) {
     ? [micBtn, input, sendBtn]
     : [input, sendBtn]);
 
-  const wrap = el('div.ask-wrap', {}, [chat, inputRow]);
+  // "Read This For Me" — only when the vision model + kiosk key are configured.
+  const vision = config.vision || {};
+  let cameraRow = null;
+  if (vision.model && vision.kioskKey) {
+    const fileInput = el('input', {
+      type: 'file', accept: 'image/*', capture: 'environment',
+      style: 'display:none', 'aria-hidden': 'true',
+    });
+    const camBtn = el('button.action', { type: 'button', style: 'width:100%' },
+      ['📷 Read Something For Me']);
+    camBtn.addEventListener('click', () => { if (!busy) fileInput.click(); });
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!file || busy) return;
+      busy = true;
+      camBtn.disabled = true;
+      addBubble('me', '📷 (photo)');
+      const reading = addBubble('them thinking', 'Reading it… this can take a minute ⏳');
+      try {
+        const b64 = await downscale(file);
+        const reply = await readPhoto(b64, vision);
+        reading.classList.remove('thinking');
+        reading.textContent = reply;
+        speak(reply, lang);
+      } catch (e) {
+        reading.classList.remove('thinking');
+        reading.textContent = 'I couldn’t read that photo. Try again with more light, holding the camera closer.';
+      } finally {
+        busy = false;
+        camBtn.disabled = false;
+        chat.scrollTop = chat.scrollHeight;
+      }
+    });
+    cameraRow = el('div', { style: 'flex:0 0 auto;padding:.4rem 0' }, [camBtn, fileInput]);
+  }
+
+  const wrap = el('div.ask-wrap', {}, cameraRow ? [chat, cameraRow, inputRow] : [chat, inputRow]);
   if (!SR) {
     wrap.insertBefore(el('div.note', { style: 'flex:0 0 auto;padding:.4rem' }, 'Voice input isn’t available here — type your question below.'), inputRow);
   }

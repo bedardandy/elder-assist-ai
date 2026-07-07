@@ -67,6 +67,13 @@ Two small, high-value safety patterns — helpful reminders, not alarms:
 Both are HA blueprints (`ha/README.md`), deterministic by design (`docs/DECISIONS.md`
 D10).
 
+**Weather is a wellness issue too.** Heat waves and icy sidewalks put more elders in
+the hospital than most of the hazards on this page. The `weather_safety` blueprint
+announces heat-risk guidance on hot days, "the mail can wait" warnings on icy
+mornings, and notifies the caregiver — configure it alongside the nudges above. The
+full heat plan and ice plan (and the snow/plow workflow) live in
+`neighborhood-and-seasons.md`.
+
 ---
 
 ## 3. The "I'm OK" morning ritual

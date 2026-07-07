@@ -145,7 +145,9 @@ of that.
 | **Get Help** | The Help page: **emergency actions first** — a big **Call {caregiver}** button and **🆘 Something is wrong** (fires an HA alarm script) — then reassurance, then a calm **Ask a Question 🗣️** tile. |
 | **Ask a Question** (reached from Get Help) | Voice-first question box to HA Assist (`POST /api/conversation/process`). Uses the browser's Web Speech API mic when available, always offers typed input, shows big chat bubbles, and speaks the reply. See §5 on the mic. |
 | **TV** | Up to six big buttons that call HA services (`script.*`, `media_player.*`, …) from `config.tv.buttons`. |
-| **My Things** | Searches **HomeBox** (`GET /api/v1/items?q=`) if `baseUrl`+`token` are set, showing name/location/serial; otherwise a big tile deep-links to the HomeBox web app. |
+| **Find My Things** | Bluetooth-tracker **"make it beep"** buttons first (`config.trackers` → `script.find_keys` etc.; wire the tags per `ha/README.md` §7), then a **HomeBox** search (`GET /api/v1/items?q=`) if `baseUrl`+`token` are set, showing name/location/serial; otherwise a big tile deep-links to the HomeBox web app. |
+| **📷 Read Something For Me** (on the Ask page) | Photograph a label, letter, bill, or expiry date: the photo is downscaled in the browser (≤1280px JPEG) and sent to the **local** vision model through the kiosk's locked-down `/ollama` proxy, then shown big and read aloud. Appears only when `config.vision.model` **and** `config.vision.kioskKey` are both set — run `./setup.sh --vision` on the hub first. See §5a. |
+| **📬 Is this a scam?** (on Get Help) | A calm expandable card: the two golden rules (never gift cards, never rush — it's always OK to hang up), how to photograph the letter with the Read button, and "call {caregiver} — they will never be annoyed." The full family playbook is `docs/playbooks/scam-shield.md`. |
 
 > **Note on voice:** the in-app mic is a *pragmatic fallback* that works on the tablet
 > itself. The real hands-free experience — "Hey Nabu, put on Jeopardy" from across the
@@ -174,6 +176,27 @@ of that.
     (the setting in §3), **or**
   - Front the kiosk with a local TLS reverse proxy.
 - **No medical decisions.** The app reminds and records; it never advises dosage.
+
+### 5a. The camera & the vision proxy (Read Something For Me)
+
+- **No persistent camera permission.** The button uses a plain file-capture input
+  (`<input type="file" capture>`), so the OS camera app opens for one deliberate shot
+  and hands back a single photo — the PWA never holds an open camera stream. This is
+  the technical enforcement of the project's no-passive-cameras rule
+  (`docs/DECISIONS.md` D11), and it works on iOS and Android alike with no
+  `getUserMedia`/secure-context requirement.
+- **Where the photo goes:** downscaled in the browser, then POSTed *same-origin* to
+  `/ollama/api/chat` — a locked-down nginx proxy inside the kiosk container that
+  forwards only that endpoint to the hub's Ollama (which stays loopback-bound). The
+  photo never leaves the house.
+- **The `kioskKey` threat model, honestly:** the key sits in `config.js` like the HA
+  token, so anyone with device access (or the key + LAN access) can use the local
+  vision model. That's compute, not data — no cloud, no cost, no stored photos — so
+  the harm is low, but it's why the proxy is **closed by default** (empty key = 403
+  for everything) and why the app should stay LAN/Tailscale-only.
+- **Speed expectations:** on CPU, a 7B vision model takes ~30–60 s per photo (the UI
+  says "this can take a minute"); with a GPU it's a few seconds. Blurry or dim photos
+  get a "try again closer, with more light" reply rather than a guess.
 
 ---
 
@@ -217,6 +240,10 @@ family contacts** (with working `tel:` links); live features show the friendly
 | My Things opens a website instead of searching | HomeBox `baseUrl`/`token` blank | Fill them in for in-app search, or leave blank to deep-link |
 | Calendar events show wrong times | HA/tablet timezone mismatch | Set the tablet timezone and HA timezone to match |
 | App won't update after changes | Old service-worker cache | Bump `SHELL_VERSION` in `sw.js`, or reload twice / clear site data |
+| Camera button missing on Ask page | `vision.model` or `vision.kioskKey` unset | Run `./setup.sh --vision` on the hub, then copy the generated `KIOSK_OLLAMA_KEY` from `.env` into `config.js` |
+| Read button says it couldn't read the photo | 403 from the proxy (key mismatch) or model not pulled | `kioskKey` must equal `KIOSK_OLLAMA_KEY` in `.env` exactly; `docker compose exec ollama ollama list` should show the vision model |
+| Reading a photo is very slow | CPU inference | Normal (30–60 s). A GPU (docker-compose.gpu.yml) makes it a few seconds |
+| Tracker buttons don't beep anything | Scripts still have placeholder actions | Wire your tag's ring button into `script.find_keys` / `find_wallet` — see `ha/README.md` §7 |
 
 ---
 

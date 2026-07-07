@@ -11,7 +11,7 @@
  *     clock and cached contacts still appear with no connection.
  */
 
-const SHELL_VERSION = 'v1';
+const SHELL_VERSION = 'v2';
 const SHELL_CACHE = `elderassist-shell-${SHELL_VERSION}`;
 const RUNTIME_CACHE = `elderassist-runtime-${SHELL_VERSION}`;
 
@@ -70,6 +70,10 @@ self.addEventListener('fetch', (event) => {
 
   // Cross-origin (Home Assistant, HomeBox, Jitsi): stay out of the way.
   if (url.origin !== self.location.origin) return;
+
+  // The vision proxy (/ollama/…) is live inference — never intercept, never cache.
+  // (POSTs are skipped above anyway; this guards any future GET use too.)
+  if (url.pathname.startsWith('/ollama/')) return;
 
   // Navigations → network-first, fall back to cached shell, then offline page.
   if (req.mode === 'navigate') {

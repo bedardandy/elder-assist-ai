@@ -45,7 +45,9 @@ Adapt the words, keep the substance. Cover all five in plain language:
 2. **What it records.** "It listens only after you say the wake word, like 'OK Nabu' —
    not the rest of the time. When it does listen, the words are turned into text *on
    this box in your house* and then thrown away. It keeps notes on things you ask it to
-   remember, and whether you took your medicine. It does **not** have a camera."
+   remember, and whether you took your medicine. It does **not** watch you — there are
+   no cameras filming anything. If *you* choose to take a photo of a label or a letter
+   so it can read it to you, that photo is read here in the house and that's that."
 3. **Who can see what.** "I can see whether you took your pills, so I can help if a
    day gets missed. I can't hear your conversations. I can't see where you are unless
    you and I turn that on together, and it's off right now."
@@ -76,7 +78,10 @@ can it see her location?" Nothing gets enabled unless the last column says **yes
 | **Location sharing** | Approximate location / "arrived safely" pings from *their own phone*. **Off by default.** Requires installing the HA Companion app and a second explicit yes (see `safety-wellness.md`). | Family users, only if enabled | ☐ |
 | **Wellness checks** | Motion *metadata only* — "there was movement in the kitchen by 10am," never where they were sitting or for how long. No cameras. | Operator + chosen Family user on a missed check | ☐ |
 | **Conversation memory** | Notes the assistant keeps: preferences, "where I put the spare key," appointment details, names. Stored on the hub (Hermes memory). | Whoever can chat with the agent (Operator + Family) | ☐ |
-| **Camera** | **NOT included in v1.** No video is captured anywhere in this system. Listed here so the answer to "is it filming me?" is a documented, permanent **no**. | Nobody — feature absent | n/a |
+| **Photos I choose to take** (labels, mail, bills — the "Read This For Me" button) | Each photo is deliberately taken by a person and read by the vision model **on the hub**. Nothing leaves the house unless someone shares the photo into a family chat. This is *not* a camera watching anyone — see the row below. | No one by default; family only if shared in chat | ☐ |
+| **Bill due dates visible to family** | Payee, amount, and due date of photographed bills (never account numbers — the system doesn't keep them). **Off by default** (`BILLS_FAMILY_VISIBLE`). See `money-and-bills.md`. | Family users, only if enabled | ☐ |
+| **My town/area for finding local services** | A coarse town or ZIP (`HOME_AREA` — never the street address) used in web searches for "senior center near me" style questions. This is a labeled internet egress. | Search engines see the town, not the address | ☐ |
+| **Passive cameras / video** | **NOT included, permanently.** No camera ever watches, records, or streams in this system. Listed here so the answer to "is it filming me?" is a documented, permanent **no**. (User-initiated photos above are the deliberate, one-shot exception — and they stay local.) | Nobody — feature absent | n/a |
 
 Notes for the operator:
 - The **"With whom" column is a promise you are making.** If you later want to widen it

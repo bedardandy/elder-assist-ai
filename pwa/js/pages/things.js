@@ -3,9 +3,36 @@
 import { el, pageShell, note, banner, spinner } from '../ui.js';
 
 export default function mountThings(ctx) {
-  const { config, homebox } = ctx;
-  const view = pageShell('My Things');
+  const { config, homebox, ha } = ctx;
+  const view = pageShell('Find My Things');
   const body = view._body;
+
+  // Bluetooth tracker "make it beep" buttons, above the inventory search.
+  // Each calls an HA script (see ha/README.md "Finding things") that rings the tag.
+  const trackers = Array.isArray(config.trackers) ? config.trackers : [];
+  if (trackers.length && ha.configured) {
+    const status = el('div', {});
+    const row = el('div.card-grid', { style: 'margin-bottom:1.2rem' });
+    for (const t of trackers) {
+      if (!t || !t.script) continue;
+      const btn = el('button.action', { type: 'button' }, [t.label || 'Make it beep']);
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        status.replaceChildren(spinner('Ringing it now…'));
+        try {
+          const objectId = t.script.includes('.') ? t.script.split('.')[1] : t.script;
+          await ha.callService('script', 'turn_on', { entity_id: 'script.' + objectId });
+          status.replaceChildren(el('span.status-pill.yes', {}, ['🔊 Listen for the beeping!']));
+        } catch (e) {
+          status.replaceChildren(banner('I couldn’t ring it — please try again in a moment.'));
+        } finally {
+          setTimeout(() => { btn.disabled = false; }, 3000);
+        }
+      });
+      row.append(btn);
+    }
+    body.append(row, status);
+  }
 
   // Deep-link mode: HomeBox not configured for direct search.
   if (!homebox.configured) {

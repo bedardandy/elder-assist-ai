@@ -1,0 +1,74 @@
+# ============================================================================
+# ElderAssist kiosk — nginx server config (rendered by envsubst at startup)
+# ============================================================================
+# This template OWNS the whole kiosk server block. It is mounted into
+# /etc/nginx/templates/default.conf.template so nginx:alpine's entrypoint runs
+# envsubst on it and writes /etc/nginx/conf.d/default.conf, REPLACING the image's
+# stock default.conf (so there is exactly one server on port 80 — no conflict).
+#
+# It does two things:
+#   1. Serves the static PWA from /usr/share/nginx/html (identical to before).
+#   2. Exposes a LOCKED-DOWN reverse proxy to Ollama for the "Read This For Me"
+#      vision feature (D11). Ollama itself stays loopback-bound on the host; the
+#      kiosk reaches it container-to-container at http://ollama:11434.
+#
+# Proxy rules (deliberately strict):
+#   - Only two exact paths are proxied: /ollama/api/chat and /ollama/api/generate.
+#     Nothing else Ollama exposes (/api/tags, model pulls, …) is reachable.
+#   - POST only (other methods → 403 via limit_except).
+#   - Every request must carry X-Kiosk-Key EXACTLY equal to ${KIOSK_OLLAMA_KEY}.
+#   - CLOSED BY DEFAULT: if KIOSK_OLLAMA_KEY is empty/unset, an empty header is
+#     the only value that could match — and we always deny an empty header — so
+#     the proxy returns 403 for every request until a key is configured.
+#   - Big bodies (photos) and slow CPU inference are allowed for.
+#
+# Only ${KIOSK_OLLAMA_KEY} is substituted here; nginx's own $variables are left
+# untouched (the entrypoint only substitutes vars present in the environment).
+# ============================================================================
+
+server {
+    listen       80;
+    server_name  localhost;
+
+    # ---- Static PWA (unchanged) -------------------------------------------
+    location / {
+        root  /usr/share/nginx/html;
+        index index.html index.htm;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+
+    # ---- Locked-down Ollama proxy: chat -----------------------------------
+    location = /ollama/api/chat {
+        limit_except POST { deny all; }
+
+        # Closed by default: require an EXACT, non-empty X-Kiosk-Key match.
+        set $ollama_deny 1;
+        if ($http_x_kiosk_key = "${KIOSK_OLLAMA_KEY}") { set $ollama_deny 0; }
+        if ($http_x_kiosk_key = "")                    { set $ollama_deny 1; }
+        if ($ollama_deny)                              { return 403; }
+
+        client_max_body_size 20m;      # room for a downscaled photo
+        proxy_read_timeout   300s;     # vision inference is slow on CPU
+        proxy_set_header     Host $host;
+        proxy_pass           http://ollama:11434/api/chat;
+    }
+
+    # ---- Locked-down Ollama proxy: generate -------------------------------
+    location = /ollama/api/generate {
+        limit_except POST { deny all; }
+
+        set $ollama_deny 1;
+        if ($http_x_kiosk_key = "${KIOSK_OLLAMA_KEY}") { set $ollama_deny 0; }
+        if ($http_x_kiosk_key = "")                    { set $ollama_deny 1; }
+        if ($ollama_deny)                              { return 403; }
+
+        client_max_body_size 20m;
+        proxy_read_timeout   300s;
+        proxy_set_header     Host $host;
+        proxy_pass           http://ollama:11434/api/generate;
+    }
+}

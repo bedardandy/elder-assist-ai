@@ -89,15 +89,47 @@ from Grocy driving a reminder without going through the agent
   for anything deterministic.
 
 ### Community blueprint gallery — **S/M**
-A curated, versioned gallery of HA blueprints beyond the shipped six (`medication_reminder`,
-`appointment_reminder`, `wellness_check`, `door_left_open`, `stove_timer_nudge`) —
-contributed patterns like "no-fridge-open-all-day" nutrition checks, hydration nudges,
-seasonal (heat-wave) check-ins, with a review process so families can trust what they
-import.
+A curated, versioned gallery of HA blueprints beyond the shipped seven
+(`medication_reminder`, `appointment_reminder`, `wellness_check`, `door_left_open`,
+`stove_timer_nudge`, `weather_safety`, `seasonal_chore_reminder`) — contributed
+patterns like "no-fridge-open-all-day" nutrition checks, hydration nudges, with a
+review process so families can trust what they import.
 - **Why not v1:** the six core blueprints had to be solid and CI-validated first
   (`README.md`, Status). A gallery needs contribution guidelines, review, and a curation
   process to stay trustworthy — that's a community-process build, best done once there's
   a community.
+
+---
+
+## Scams, money, and paperwork
+
+### Automated phone call screening — **L**
+Answering-machine-style screening (Asterisk/FreePBX patterns) that intercepts unknown
+callers before the phone rings, or an on-device robocall filter tied into the scam
+shield (`docs/playbooks/scam-shield.md`).
+- **Why not v1:** `docs/DECISIONS.md` D13 — blocking a grandchild's real call from an
+  unrecognized number is a catastrophic trust failure, and screening infrastructure is
+  heavy and brittle. Carrier-level scam blocking + the advice-only scam-check skill
+  cover most of the value today. Revisit when a false-negative-safe design exists.
+
+### Medicare / insurance paperwork helper — **M/L (research)**
+Photograph an EOB, denial letter, or enrollment form; the vision model explains what it
+actually says, what (if anything) is owed, and what the deadline is — the same
+read-and-remind (never transact, D14) discipline as `bill-helper`.
+- **Why not v1:** these documents are high-stakes and jargon-dense; a 7B local model
+  misreading "this is not a bill" as a bill (or vice versa) causes real fear or real
+  missed deadlines. Needs accuracy evaluation against real document samples first.
+
+### Pharmacy price shopping — **M (research)**
+GoodRx-style comparison for cash-price prescriptions, feeding the refill checklist.
+- **Why not v1:** no stable open API; scraping is fragile and ToS-fraught. The refill
+  playbook's "ask the pharmacist about the cash price and discount programs" line
+  captures much of the value manually.
+
+### Passive fridge/pantry camera inventory — **rejected, not deferred**
+A camera watching the fridge to auto-track food would violate the no-passive-cameras
+line (`docs/DECISIONS.md` D11) that the consent checklist promises permanently. The
+user-initiated path (photograph the label, Grocy stock) is the supported design.
 
 ---
 

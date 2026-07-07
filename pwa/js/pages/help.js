@@ -67,7 +67,29 @@ export default function mountHelp(ctx) {
     el('p', { style: 'font-size:var(--fs-body);margin:0' }, `If you feel unwell or frightened, tap the red button above and ${name} will be told. If you are in danger, call 911 now.`),
   ]));
 
-  // 4) Ask a Question — the AI chat page, kept reachable but visually calm and
+  // 4) "Is this a scam?" — calm, non-emergency guidance (D13). Expands in place;
+  //    no extra navigation for a worried person to get lost in.
+  const scamBody = el('div', { style: 'display:none' }, [
+    el('p', { style: 'font-size:var(--fs-body);font-weight:700;margin:.8rem 0 .4rem' },
+      'Remember two things:'),
+    el('p', { style: 'font-size:var(--fs-body);margin:0 0 .4rem' },
+      '1. Never buy gift cards for anyone who calls or writes to you.'),
+    el('p', { style: 'font-size:var(--fs-body);margin:0 0 .8rem' },
+      '2. Never rush. Real banks and real government offices always let you take your time. It is always OK to hang up.'),
+    el('p', { style: 'font-size:var(--fs-body);margin:0 0 .4rem' },
+      `📷 Show it to me: tap “Ask a Question” below, then “Read Something For Me”, and take a photo of the letter.`),
+    el('p', { style: 'font-size:var(--fs-body);margin:0' },
+      `📞 Or call ${name} — they will never be annoyed. Checking first is always the smart move.`),
+  ]);
+  const scamBtn = el('button.action', { type: 'button', style: 'margin-top:1.4rem;width:100%' },
+    ['📬 Is this a scam?']);
+  scamBtn.addEventListener('click', () => {
+    const open = scamBody.style.display !== 'none';
+    scamBody.style.display = open ? 'none' : 'block';
+  });
+  body.append(scamBtn, el('div.card', { style: 'cursor:default;display:block;padding-top:0;border-top:none' }, [scamBody]));
+
+  // 5) Ask a Question — the AI chat page, kept reachable but visually calm and
   //    placed BELOW the emergency actions so it never competes with them.
   const askBtn = el('a.action.ask-tile', {
     href: '#/ask',

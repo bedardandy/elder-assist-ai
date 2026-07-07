@@ -15,6 +15,9 @@
     Also enable Grocy.
 .PARAMETER WebUI
     Also enable Open WebUI.
+.PARAMETER Vision
+    Also pull the local vision model ("Read This For Me") and give the kiosk
+    Ollama proxy a random key if one isn't set yet.
 .PARAMETER All
     Enable every optional profile.
 .PARAMETER NoPull
@@ -33,6 +36,7 @@ param(
     [switch]$Inventory,
     [switch]$Grocy,
     [switch]$WebUI,
+    [switch]$Vision,
     [switch]$All,
     [switch]$NoPull
 )
@@ -49,7 +53,7 @@ function Info($m) { Write-Host "-> $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "!! $m" -ForegroundColor Yellow }
 function Die($m)  { Write-Host "xx $m" -ForegroundColor Red; exit 1 }
 
-if ($All) { $Voice = $true; $Inventory = $true; $Grocy = $true; $WebUI = $true }
+if ($All) { $Voice = $true; $Inventory = $true; $Grocy = $true; $WebUI = $true; $Vision = $true }
 
 Write-Host "ElderAssist AI setup (Windows)" -ForegroundColor Cyan
 Write-Host "Repo: $RepoRoot"
@@ -192,6 +196,46 @@ if (-not $ready) {
     }
 } else {
     Info "Skipping model pull (-NoPull). Later: docker compose exec ollama ollama pull $model"
+}
+
+# --- 8b. Vision model + kiosk proxy key (-Vision) --------------------------
+# Pull the local vision-language model for "Read This For Me", and make sure the
+# kiosk's Ollama proxy has a key (generate a random one if it's blank), then
+# recreate the kiosk container so the nginx template picks the key up.
+if ($Vision) {
+    Write-Host ""
+    $currentKey = Get-EnvValue 'KIOSK_OLLAMA_KEY' ''
+    if ([string]::IsNullOrEmpty($currentKey)) {
+        $bytes = New-Object byte[] 16
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $newKey = ($bytes | ForEach-Object { $_.ToString('x2') }) -join ''
+        $envLines = Get-Content $EnvFile
+        $envLines = $envLines | ForEach-Object {
+            if ($_ -match '^KIOSK_OLLAMA_KEY=') { "KIOSK_OLLAMA_KEY=$newKey" } else { $_ }
+        }
+        Set-Content -Path $EnvFile -Value $envLines
+        Info "Generated a random KIOSK_OLLAMA_KEY for the vision proxy."
+        Write-Host "   Put this SAME value in pwa/config.js as vision.kioskKey to enable the camera button."
+        docker compose --env-file $EnvFile -f $ComposeFile up -d kiosk *> $null
+    } else {
+        Info "KIOSK_OLLAMA_KEY already set - keeping it."
+    }
+
+    $visionModel = Get-EnvValue 'OLLAMA_VISION_MODEL' 'qwen2.5vl:7b'
+    if (-not $ready) {
+        Warn "Ollama isn't ready - skipping the vision model pull. Retry later:"
+        Write-Host "   docker compose exec ollama ollama pull $visionModel"
+    } elseif (-not $NoPull) {
+        Info "Pulling vision model '$visionModel' (first run downloads several GB)..."
+        docker compose --env-file $EnvFile -f $ComposeFile exec -T ollama ollama pull $visionModel
+        if ($LASTEXITCODE -ne 0) {
+            Warn "Vision model pull failed. Retry later: docker compose exec ollama ollama pull $visionModel"
+        } else {
+            Info "Vision model '$visionModel' ready."
+        }
+    } else {
+        Info "Skipping vision model pull (-NoPull). Later: docker compose exec ollama ollama pull $visionModel"
+    }
 }
 
 # --- 9. Next steps ---------------------------------------------------------
