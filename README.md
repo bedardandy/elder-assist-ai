@@ -25,6 +25,25 @@ a voice. Nothing leaves the house unless you switch it on.
   manual; "where did I put the spare key"; who came to fix the furnace and when.
 - 🗣️ **Ask anything** — a local LLM answers questions, explains steps patiently, and
   never gets tired of repeating them.
+- 📬 **"Is this a scam?"** — photograph the letter, forward the text, or describe the
+  call; the assistant checks it against the classic elder-fraud patterns in plain
+  words and offers to loop in family with one tap. It never says "definitely safe."
+- 📷 **Read this for me** — point the tablet's camera at a label, expiration date,
+  bill, or piece of mail; a *local* vision model reads it aloud in big print. Photos
+  are always user-initiated — there are no passive cameras in this system, period.
+- 💵 **Bills without the pile** — photograph a bill; the assistant extracts the payee,
+  amount, and due date, sets the reminder, and (opt-in) keeps family in the loop.
+  It reads and reminds — it **never** pays or stores account numbers.
+- 🔑 **Find the keys** — Bluetooth tags on keys/wallet beep on command from a giant
+  button; voice notes ("I put the passport in the desk") cover everything else.
+- 🍎 **Kitchen memory** — expiry-date reading + Grocy pantry stock ("eat these first"
+  nudges), grocery lists the family can shop from.
+- 🌡️ **Weather that watches out for them** — heat-risk and ice warnings with concrete
+  guidance, not just a forecast; snow in the forecast triggers the plow-guy workflow.
+- 🚜 **Seasonal chores handled** — plowing, mowing, gutters, furnace filters: a vendor
+  registry plus season- and weather-triggered reminders, tracked to done.
+- 📍 **Local resources** — senior centers, meal delivery, rides, and trustworthy
+  handymen near home, found and saved to the household registry.
 - 🛰️ **Family co-pilot** — the same agent, same memory, reachable by the family over
   the chat apps they already use.
 

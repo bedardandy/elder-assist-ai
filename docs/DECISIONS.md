@@ -110,3 +110,53 @@ Hard rule: **anything with a consequence for missing it is an HA automation**
 conversation agent, Hermes) owns understanding, conversation, memory, and *creating*
 those automations — never being the runtime for them. This is the single most
 important reliability decision in the design.
+
+## D11 — Vision assistance: local VLM, user-initiated photos only
+
+Requirement: read labels, expiration dates, bills, mail. Options: cloud vision APIs
+(best accuracy, but ships photos of mail/medicine/finances off-site — against the
+default-local principle), HACS "LLM Vision" custom integration (extra moving part,
+still needs a backend), or a local VLM served by the Ollama we already run.
+**Chosen:** local VLM (default `qwen2.5vl:7b`, swappable) reached two ways: photos
+sent to Hermes over its chat channels, and a kiosk "Read This For Me" camera page that
+talks to Ollama through a locked-down nginx proxy on the kiosk service (Ollama itself
+stays loopback-bound). Hard policy line: **no passive cameras** — every photo is
+deliberately taken by a person, on their initiative. That distinction (user-initiated
+capture vs. surveillance) is written into the consent checklist. 7B-class VLM accuracy
+on tiny date stamps is imperfect → the skill is instructed to say "I'm not sure" and
+ask for a closer photo rather than guess; expiry answers always show the raw text it
+read so a human can verify.
+
+## D12 — Finding things: HA-native BLE trackers, not AirTags/Tile-cloud
+
+AirTags are locked to Apple's ecosystem (HA cannot make one beep on demand); Tile's
+cloud API is closed/deprecated for third parties. **Chosen:** Bluetooth tags that
+Home Assistant can ring directly (Chipolo/Pebblebee "works with" variants, or cheap
+iBeacon-class tags with a ring characteristic) heard through **ESPHome Bluetooth
+proxies** (~$5 ESP32 per room — also useful for presence). Giant per-item "Make my
+keys beep" buttons on the kiosk Find My Things page call HA scripts. Graceful
+fallback documented: last-seen room from BLE RSSI when a tag can't ring. The
+"where did I put" voice notes remain the zero-hardware baseline.
+
+## D13 — Scam shield: advice-only, family-in-the-loop, no autonomous screening
+
+Elder fraud is the single most financially damaging threat in scope. Options
+considered: automated call screening (Asterisk/answering-machine patterns — heavy,
+brittle, and blocking a grandchild's real call is catastrophic for trust → roadmap),
+inbound email filtering (elder email routing varies too much for v1). **Chosen:** a
+Hermes `scam-check` skill + persona training: the elder (or family) reads, forwards,
+or photographs the suspicious thing; the agent runs a red-flag checklist (urgency,
+gift cards, wire transfer, impersonation of family/IRS/Medicare, "don't tell anyone"),
+gives a plain-words verdict with the reasons, and **always offers to loop in the
+caregiver** — one tap/word. Hard rules: never shame ("these are professionals, they
+fool everyone"), never say "definitely safe" (say "I don't see red flags, but check
+with {caregiver} before sending money to anyone"), treat "don't tell my family" as a
+red flag itself, and proactively teach the two golden rules (never gift cards, never
+rush). The system never answers calls or deletes mail on its own.
+
+## D14 — Money handling: read-and-remind, never transact
+
+Bills, refills, purchases: the assistant photographs/extracts/schedules/notifies, and
+a human pays. No stored payment credentials, no bill-pay integrations, no exceptions —
+this is a trust boundary, not a missing feature. Family visibility of bill due dates
+is opt-in via the consent checklist (financial data is listed as its own row).

@@ -113,6 +113,14 @@ capability — per-family choice, documented trade-off.
 | Streaming setup help | Playbook + HA scripts: "watch Jeopardy" = input switch + app launch as one command |
 | Forgetfulness support | Hermes persistent memory + daily rhythm announcements + "where did I put" note-taking skill |
 | Wellness/safety | No-motion-by-morning check, door-left-open, stove-timer patterns (blueprints) |
+| Reading labels & expiry dates | Local vision model (Ollama VLM): kiosk "Read This For Me" camera page or photo via Hermes chat; user-initiated photos only — no passive cameras |
+| Food inventory | Grocy stock + photo-assisted entry ("what's in this can, when does it expire") |
+| Find keys/wallet | BLE trackers that beep on command via HA (ESPHome Bluetooth proxy + HA-compatible tags), giant buttons on the Find My Things page |
+| Weather guidance | Elder-specific weather automations: heat-risk and ice warnings, storm prep, weather-aware morning brief |
+| Bills | Photograph bill → vision model extracts payee/amount/due date → confirmed calendar reminder + family visibility; never pays autonomously |
+| "Is this a scam?" | Hermes scam-check skill: read/photograph the mail, text, or caller story → red-flag analysis, plain-words verdict, one-tap family loop-in; advice-only |
+| Local resources | Hermes search anchored to home area: senior services, meal delivery, rides, handymen within X miles (labeled egress) |
+| Seasonal chores & projects | Vendor registry + seasonal/weather-triggered reminders (snow forecast → plow arrangement, mowing, gutters, furnace filters) tracked as HA todos |
 
 ## Trust & privacy model
 
