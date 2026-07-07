@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ElderAssist — Offline</title>
+  <meta name="theme-color" content="#17726b" />
+  <link rel="stylesheet" href="./css/base.css" />
+  <link rel="stylesheet" href="./css/components.css" />
+</head>
+<body>
+  <main id="app">
+    <header class="app-header">
+      <div class="greet">
+        <span class="hello" id="hello">Hello</span>
+        <span class="date" id="date"></span>
+      </div>
+      <div class="clock" id="clock"></div>
+    </header>
+    <div class="view page">
+      <div class="page-body">
+        <div class="banner"><span class="icon">📶</span><span>The house computer can’t be reached right now. The time and date above are still correct.</span></div>
+        <p class="note">When the connection comes back, tap the button below.</p>
+        <a class="action" href="./index.html">↻ Try again</a>
+      </div>
+    </div>
+  </main>
+  <script>
+    function tick() {
+      var now = new Date();
+      var h = now.getHours();
+      var g = h < 12 ? 'Good morning' : (h < 18 ? 'Good afternoon' : 'Good evening');
+      document.getElementById('hello').textContent = g;
+      document.getElementById('date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      document.getElementById('clock').textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    }
+    tick(); setInterval(tick, 15000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,405 @@
+/* ==========================================================================
+   ElderAssist Kiosk — components.css
+   Home grid, subpage chrome, cards, chat, and status states.
+   ========================================================================== */
+
+/* ---- The view container ------------------------------------------------- */
+.view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Home fills the viewport and never scrolls; subpages may scroll their body. */
+.view.home { overflow: hidden; }
+.view.page { overflow: hidden; }
+
+/* ---- HOME: 6 enormous buttons, 2 columns x 3 rows ---------------------- */
+.home-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+  gap: var(--gap);
+  padding: var(--pad);
+}
+
+.btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 0.4);
+  min-height: var(--touch);
+  border: none;
+  border-radius: var(--radius-lg);
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  padding: var(--u);
+  transition: transform 0.06s ease;
+  text-align: center;
+}
+.btn:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.10); }
+.btn .icon  { font-size: var(--fs-icon); line-height: 1; }
+.btn .label { font-size: var(--fs-label); font-weight: 800; letter-spacing: 0.01em; }
+
+.btn.call   { background: var(--c-call); }
+.btn.med    { background: var(--c-med); }
+.btn.today  { background: var(--c-today); }
+.btn.ask    { background: var(--c-ask); }
+.btn.tv     { background: var(--c-tv); }
+.btn.things { background: var(--c-things); }
+
+/* On short/wide kiosk screens keep icons from crowding labels. */
+@media (max-height: 560px) {
+  .btn .icon { font-size: calc(3.2rem * var(--scale)); }
+}
+
+/* ---- SUBPAGE chrome ---------------------------------------------------- */
+.page-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--u) var(--pad);
+  background: var(--surface);
+  border-bottom: 4px solid var(--line);
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.5);
+  min-height: calc(var(--u) * 4.4);
+  padding: 0 calc(var(--u) * 1.4);
+  border: 4px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-label);
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+}
+.back:active { transform: translateY(3px); }
+.page-title {
+  font-size: var(--fs-title);
+  font-weight: 800;
+  margin: 0;
+}
+
+.page-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--pad);
+}
+
+/* ---- Cards (people, medicine, events, things) -------------------------- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--gap);
+}
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+  min-height: calc(var(--touch) * 1.1);
+  padding: var(--u);
+  border: 4px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.card:active { transform: translateY(3px); }
+.card .card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.card .card-name { font-size: var(--fs-lead); font-weight: 800; }
+.card .card-sub  { font-size: var(--fs-body); color: var(--ink-soft); }
+
+/* Initial-letter avatar. */
+.avatar {
+  flex: 0 0 auto;
+  width: calc(var(--u) * 5);
+  height: calc(var(--u) * 5);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: calc(2.6rem * var(--scale));
+  font-weight: 800;
+}
+
+/* Emergency / caregiver card — visually distinct, pinned first. */
+.card.emergency {
+  border-color: var(--c-danger);
+  background: #fff4f4;
+  border-width: 5px;
+}
+.card.emergency .avatar { background: var(--c-danger); }
+.card.emergency .card-name { color: var(--c-danger); }
+
+/* ---- Big primary action button (used on Medicine, Help) ---------------- */
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap);
+  width: 100%;
+  min-height: calc(var(--touch) * 1.3);
+  padding: var(--u) var(--pad);
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--c-call);
+  color: #fff;
+  font-size: var(--fs-title);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.action:active { transform: translateY(4px); }
+.action.done   { background: #2e7d32; }
+.action.danger { background: var(--c-danger); }
+.action:disabled { opacity: 0.6; cursor: default; }
+
+/* Status pill on the medicine page. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.5);
+  padding: calc(var(--u) * 0.7) calc(var(--u) * 1.2);
+  border-radius: 999px;
+  font-size: var(--fs-lead);
+  font-weight: 800;
+  border: 3px solid transparent;
+}
+.status-pill.yes { background: #e6f4ea; color: #1b5e20; border-color: #1b5e20; }
+.status-pill.no  { background: #fff3e0; color: #8a2e02; border-color: #8a2e02; }
+
+/* ---- Section headings inside pages ------------------------------------- */
+.section-title {
+  font-size: var(--fs-lead);
+  font-weight: 800;
+  margin: var(--u) 0 calc(var(--u) * 0.6);
+}
+.section-title:first-child { margin-top: 0; }
+
+/* ---- Lists (events, reminders) ----------------------------------------- */
+.big-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--u); }
+.big-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap);
+  padding: var(--u);
+  background: var(--surface);
+  border: 3px solid var(--line);
+  border-radius: var(--radius);
+}
+.big-list .when { font-weight: 800; min-width: calc(var(--u) * 8); }
+.big-list .what { font-weight: 600; }
+
+/* ---- TV grid ----------------------------------------------------------- */
+.tv-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+.tv-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 0.3);
+  min-height: var(--touch);
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--c-tv);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  padding: var(--u);
+}
+.tv-btn:active { transform: translateY(4px); }
+.tv-btn .icon { font-size: var(--fs-icon); line-height: 1; }
+.tv-btn .label { font-size: var(--fs-label); font-weight: 800; }
+
+/* ---- Ask (voice chat) -------------------------------------------------- */
+.ask-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.chat {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  padding-bottom: var(--u);
+}
+.bubble {
+  max-width: 85%;
+  padding: var(--u) var(--pad);
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.bubble.me   { align-self: flex-end; background: #0d47a1; color: #fff; border-bottom-right-radius: 6px; }
+.bubble.them { align-self: flex-start; background: var(--surface); border: 3px solid var(--line); border-bottom-left-radius: 6px; }
+.bubble.them.thinking { color: var(--ink-soft); font-style: italic; }
+
+.ask-input {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--gap);
+  align-items: stretch;
+  padding-top: var(--u);
+  border-top: 3px solid var(--line);
+}
+.ask-input input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-lead);
+  padding: var(--u);
+  border: 4px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.mic {
+  flex: 0 0 auto;
+  width: calc(var(--u) * 6);
+  min-height: calc(var(--u) * 6);
+  border: none;
+  border-radius: var(--radius);
+  background: var(--c-ask);
+  color: #fff;
+  font-size: var(--fs-icon);
+  cursor: pointer;
+}
+.mic.listening { background: var(--c-danger); animation: pulse 1s infinite; }
+.send {
+  flex: 0 0 auto;
+  padding: 0 var(--pad);
+  border: none;
+  border-radius: var(--radius);
+  background: var(--c-call);
+  color: #fff;
+  font-size: var(--fs-lead);
+  font-weight: 800;
+  cursor: pointer;
+}
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+/* ---- Search (My Things) ------------------------------------------------ */
+.search-row { display: flex; gap: var(--gap); margin-bottom: var(--u); }
+.search-row input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-lead);
+  padding: var(--u);
+  border: 4px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* ---- Full-screen "Calling…" overlay ------------------------------------ */
+.calling {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--c-call);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pad);
+  padding: var(--pad);
+  text-align: center;
+}
+.calling .who { font-size: calc(3.4rem * var(--scale)); font-weight: 800; }
+.calling .status { font-size: var(--fs-lead); opacity: 0.95; }
+.calling .ring { font-size: calc(6rem * var(--scale)); animation: pulse 1.2s infinite; }
+.calling .cancel {
+  min-height: calc(var(--touch) * 1.2);
+  min-width: 60%;
+  border: 5px solid #fff;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: #fff;
+  font-size: var(--fs-title);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ---- Friendly error banner --------------------------------------------- */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--u) var(--pad);
+  margin-bottom: var(--u);
+  border-radius: var(--radius);
+  border: 4px solid #8a2e02;
+  background: #fff3e0;
+  color: #5a1e01;
+  font-size: var(--fs-body);
+  font-weight: 700;
+}
+.banner .icon { font-size: var(--fs-lead); }
+
+/* ---- Empty / loading states -------------------------------------------- */
+.note {
+  padding: var(--pad);
+  font-size: var(--fs-lead);
+  color: var(--ink-soft);
+  text-align: center;
+  font-weight: 600;
+}
+.spinner {
+  width: calc(var(--u) * 3);
+  height: calc(var(--u) * 3);
+  border: 6px solid var(--line);
+  border-top-color: var(--c-brand);
+  border-radius: 50%;
+  margin: var(--u) auto;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Setup / not-configured screen ------------------------------------- */
+.setup {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--pad);
+  background: var(--bg);
+}
+.setup-card {
+  max-width: 760px;
+  background: var(--surface);
+  border: 5px solid var(--c-brand);
+  border-radius: var(--radius-lg);
+  padding: var(--pad);
+  box-shadow: var(--shadow);
+}
+.setup-card h1 { font-size: var(--fs-title); margin: 0 0 var(--u); }
+.setup-card p  { font-size: var(--fs-body); }
+.setup-card ol { font-size: var(--fs-body); line-height: 1.6; }
+.setup-card code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  background: #eef0f2;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+.setup-card .big-emoji { font-size: calc(5rem * var(--scale)); text-align: center; display: block; }

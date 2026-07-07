@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5" />
+  <title>ElderAssist</title>
+  <meta name="description" content="A simple, large-print home screen for calling family, medicine, reminders, TV and help." />
+
+  <!-- Theme + PWA -->
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#17726b" />
+  <meta name="color-scheme" content="light" />
+
+  <!-- iOS / Safari PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ElderAssist" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+
+  <link rel="stylesheet" href="./css/base.css" />
+  <link rel="stylesheet" href="./css/components.css" />
+</head>
+<body>
+  <main id="app" role="application" aria-label="ElderAssist home">
+    <!-- Progressive-enhancement fallback shown until JS boots. -->
+    <div class="note" style="padding:2rem">Loading…</div>
+  </main>
+
+  <noscript>
+    <div class="setup"><div class="setup-card">
+      <h1>Please turn on JavaScript</h1>
+      <p>This app needs JavaScript to run. A caregiver can enable it in the browser or kiosk settings.</p>
+    </div></div>
+  </noscript>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

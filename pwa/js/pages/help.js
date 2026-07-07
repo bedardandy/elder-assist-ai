@@ -1,0 +1,70 @@
+/* help.js — reach the caregiver, raise an alarm, and calm reassurance. */
+
+import { el, pageShell, banner, speak } from '../ui.js';
+
+function jitsiUrl(config, cg) {
+  if (cg.url) return cg.url;
+  const base = (config.jitsiBase || 'https://meet.jit.si').replace(/\/+$/, '');
+  const room = encodeURIComponent(cg.jitsiRoom || 'ElderAssist-Care');
+  return `${base}/${room}#config.prejoinConfig.enabled=false&config.prejoinPageEnabled=false&config.disableDeepLinking=true`;
+}
+
+export default function mountHelp(ctx) {
+  const { config, ha } = ctx;
+  const cg = config.caregiver || {};
+  const view = pageShell('Ask for Help');
+  const body = view._body;
+
+  const name = cg.name || 'your caregiver';
+
+  // 1) Big "Call caregiver" button.
+  if (cg.phone || cg.jitsiRoom || cg.url) {
+    const wantsVideo = cg.type === 'video' && (cg.jitsiRoom || cg.url);
+    const callBtn = el('button.action', { type: 'button', style: 'margin-bottom:1.4rem' }, [`📞 Call ${name}`]);
+    callBtn.addEventListener('click', () => {
+      if (wantsVideo) {
+        window.open(jitsiUrl(config, cg), '_blank', 'noopener');
+      } else if (cg.phone) {
+        window.location.href = 'tel:' + cg.phone.replace(/[^\d+]/g, '');
+      } else {
+        window.open(jitsiUrl(config, cg), '_blank', 'noopener');
+      }
+    });
+    body.append(callBtn);
+  }
+
+  // 2) "Something is wrong" — fires an HA script that notifies family.
+  const scriptEntity = config.help && config.help.alarmScript;
+  if (scriptEntity && ha.configured) {
+    const status = el('div', { style: 'margin-bottom:1.4rem' });
+    const alarmBtn = el('button.action.danger', { type: 'button' }, ['🆘 Something is wrong']);
+    alarmBtn.addEventListener('click', async () => {
+      alarmBtn.disabled = true;
+      alarmBtn.textContent = 'Sending…';
+      try {
+        const objectId = scriptEntity.includes('.') ? scriptEntity.split('.')[1] : scriptEntity;
+        // script.turn_on works for any script entity id.
+        await ha.callService('script', 'turn_on', { entity_id: 'script.' + objectId });
+        status.replaceChildren(el('span.status-pill.yes', {}, ['✓ ', `${name} has been told. Help is on the way.`]));
+        speak(`I have told ${name}. Help is on the way. You are okay.`, config.language);
+      } catch (e) {
+        alarmBtn.disabled = false;
+        alarmBtn.textContent = '🆘 Something is wrong';
+        status.replaceChildren(banner(e.message || ha.friendly()));
+      }
+    });
+    body.append(alarmBtn, status);
+  }
+
+  // 3) Reassurance.
+  body.append(el('div.card', { style: 'cursor:default;display:block' }, [
+    el('p', { style: 'font-size:var(--fs-lead);font-weight:700;margin:0 0 .6rem' }, 'You are safe.'),
+    el('p', { style: 'font-size:var(--fs-body);margin:0' }, `If you feel unwell or frightened, tap the red button above and ${name} will be told right away. In a real emergency, call your local emergency number.`),
+  ]));
+
+  if (!(cg.phone || cg.jitsiRoom || cg.url) && !(scriptEntity && ha.configured)) {
+    body.insertBefore(banner('Help contacts aren’t set up yet. A caregiver can add them in config.js.'), body.firstChild);
+  }
+
+  return view;
+}

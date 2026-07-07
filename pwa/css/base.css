@@ -1,0 +1,177 @@
+/* ==========================================================================
+   ElderAssist Kiosk — base.css
+   Huge-print, high-contrast (WCAG AAA where possible), light theme.
+   Everything scales from a single --scale variable driven by the A / A+ toggle.
+   ========================================================================== */
+
+:root {
+  /* Text-size multiplier, overridden by the A/A+ toggle (persisted). */
+  --scale: 1;
+
+  /* Base rhythm — big by default. */
+  --u: calc(1rem * var(--scale));   /* spacing unit */
+  --gap: calc(var(--u) * 1.4);
+  --pad: calc(var(--u) * 1.6);
+
+  /* Type scale (elderly-legible: nothing below ~20px). */
+  --fs-body:   calc(1.5rem  * var(--scale));   /* ~24px */
+  --fs-label:  calc(1.9rem  * var(--scale));   /* ~30px, button labels >= 28 */
+  --fs-lead:   calc(2.2rem  * var(--scale));
+  --fs-title:  calc(2.8rem  * var(--scale));
+  --fs-clock:  calc(3.2rem  * var(--scale));
+  --fs-icon:   calc(4.6rem  * var(--scale));   /* button glyphs >= 64px */
+
+  /* Palette — light huge-print. */
+  --bg:        #f6f4ee;   /* warm off-white */
+  --surface:   #ffffff;
+  --ink:       #16181d;   /* near-black text, ~15:1 on --bg */
+  --ink-soft:  #3b3f47;
+  --line:      #c9c6bd;
+  --focus:     #ffb300;   /* thick amber focus ring */
+
+  /* Button colors — each dark enough for AAA (7:1) white text. */
+  --c-call:    #1b5e20;   /* green   */
+  --c-med:     #0d47a1;   /* blue    */
+  --c-today:   #4a148c;   /* purple  */
+  --c-ask:     #8a2e02;   /* amber-brown */
+  --c-tv:      #00564b;   /* teal    */
+  --c-things:  #37474f;   /* slate   */
+  --c-help:    #1b5e20;
+  --c-danger:  #b71c1c;   /* emergency red */
+  --c-brand:   #17726b;   /* app brand teal */
+
+  --radius: calc(var(--u) * 1.1);
+  --radius-lg: calc(var(--u) * 1.6);
+  --shadow: 0 6px 0 rgba(0,0,0,0.14), 0 10px 24px rgba(0,0,0,0.10);
+
+  --touch: 120px;   /* minimum touch target */
+
+  color-scheme: light;
+}
+
+/* Text-size presets applied to <html>. */
+html[data-textsize="lg"]  { --scale: 1.18; }
+html[data-textsize="xl"]  { --scale: 1.42; }
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;              /* home never scrolls */
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--fs-body);
+  line-height: 1.35;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Subpages may need vertical scroll; the app root manages it per-view. */
+#app { height: 100%; display: flex; flex-direction: column; }
+#view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+/* Big, obvious focus for keyboard / switch access. */
+:focus-visible {
+  outline: 5px solid var(--focus);
+  outline-offset: 3px;
+}
+
+button, a { font-family: inherit; }
+
+/* Remove text selection wobble on giant buttons during taps. */
+.btn, .tile, .back, .txt-toggle button, .card { user-select: none; }
+
+/* Screen-reader-only helper. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---- Header: greeting + giant clock + text-size toggle ------------------ */
+.app-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: calc(var(--u) * 0.9) var(--pad);
+  background: var(--surface);
+  border-bottom: 4px solid var(--line);
+}
+
+.greet {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.greet .hello {
+  font-size: var(--fs-lead);
+  font-weight: 800;
+  line-height: 1.1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;       /* wrap to at most two lines, never clip the name mid-word */
+  line-clamp: 2;
+  overflow: hidden;
+}
+.greet .date {
+  font-size: var(--fs-body);
+  color: var(--ink-soft);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clock {
+  flex: 0 0 auto;
+  font-size: var(--fs-clock);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.txt-toggle {
+  display: flex;
+  gap: calc(var(--u) * 0.5);
+  flex: 0 0 auto;
+}
+.txt-toggle button {
+  min-width: calc(var(--u) * 3.4);
+  min-height: calc(var(--u) * 3.4);
+  border: 3px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+  line-height: 1;
+}
+.txt-toggle button.small { font-size: calc(1.4rem * var(--scale)); }
+.txt-toggle button.big   { font-size: calc(2.1rem * var(--scale)); }
+.txt-toggle button[aria-pressed="true"] {
+  background: var(--ink);
+  color: #fff;
+}
+
+@media (max-width: 1100px) {
+  .clock { display: none; }   /* give the greeting full width on smaller tablets/phones */
+}
+@media (max-width: 860px) {
+  /* Keep the long greeting to two comfortable lines on smaller tablets/phones. */
+  .greet .hello { font-size: calc(1.6rem * var(--scale)); }
+}
+@media (max-width: 480px) {
+  .greet .hello {
+    font-size: calc(1.3rem * var(--scale));
+    -webkit-line-clamp: 3;     /* phones have vertical room; never hide the name */
+    line-clamp: 3;
+  }
+  .app-header { padding: calc(var(--u) * 0.6) var(--u); }
+}
